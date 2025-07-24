@@ -768,6 +768,76 @@
         </div>
       </div>
       
+      <div id="sample-info" v-if="selectionInfo" style="margin-top: 1em;">
+          <v-btn size="small" color="primary" @click="fetchRectangleSamples" :loading="loadingSamples === 'loading'" :disabled="loadingSamples === 'loading'">
+            Get NO₂ Samples
+          </v-btn>
+          <v-btn size="small" color="primary" @click="fetchCenterPointSample" :loading="loadingPointSample === 'loading'" :disabled="loadingPointSample === 'loading'">
+            Get Center Point NO₂ Sample
+          </v-btn>
+        </div>
+        <cds-dialog 
+          title="NO₂ Samples" 
+          v-model="sampleDialog" 
+          >
+          <div 
+            v-if="loadingSamples === 'loading'" 
+            >Loading rectangle samples...
+            <v-progress-linear
+              indeterminate
+              height="20"
+            >
+            </v-progress-linear>
+          </div>
+          
+          <div v-if="sampleError" class="text-red">Error: {{ sampleError }}</div>
+          <div v-if="sampleResults && Object.keys(sampleResults).length > 0" class="mt-2">
+            Sample Mean NO<sub>2</sub>
+            <table style="width: 100%; max-height: 120px; overflow-y: auto; border-collapse: collapse;">
+              <thead>
+              <tr>
+                <th class="font-weight-bold text-white">Time</th>
+                <th cless="font-weight-bold text-white">Value</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="(result, time) in sampleResults" :key="time">
+                <td class="pa-2" style="border-bottom: 1px solid #eee;">
+                  {{ new Date(Number(time)) }}
+                </td>
+                <td class="pa-2" style=" border-bottom: 1px solid #eee;">
+                  {{ result.value !== null ? result.value.toExponential(3) : 'N/A' }}
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="loadingPointSample === 'loading'" class="mt-2">Loading center point sample...</div>
+          <div v-if="pointSampleError" class="mt-2 text-red">Error: {{ pointSampleError }}</div>
+          <div v-if="pointSampleResult && Object.keys(pointSampleResult).length > 0" class="mt-2">
+            Center Point NO₂ (mean) by time:
+            <table style="width: 100%; max-height: 120px; overflow-y: auto; border-collapse: collapse;">
+              <thead>
+              <tr>
+                <th class="font-weight-bold text-white">Time</th>
+                <th class="font-weight-bold text-white">Value</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="(result, time) in pointSampleResult" :key="time">
+                <td class="pa-2" style="border-bottom: 1px solid #eee;">
+                {{ new Date(Number(time)) }}
+                </td>
+                <td class="pa-2" style="border-bottom: 1px solid #eee;">
+                {{ result.value !== null ? result.value.toExponential(3) : 'N/A' }}
+                </td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="pointSampleResult && Object.keys(pointSampleResult).length === 0" class="mt-2">No data for this point/time.</div>
+        </cds-dialog>
+      
       <div id="information">
       <article>
         <h2>TEMPO NO<sub>2</sub> Data</h2>
@@ -954,6 +1024,8 @@ import { usezoomhome} from './composables/leaflet/useZoomHome';
 import { useImageOverlay } from "./composables/leaflet/useImageOverlay";
 import { useFieldOfRegard} from "./composables/leaflet/useFieldOfRegard";
 import { useLocationMarker } from "./composables/leaflet/useMarker";
+import { useRectangleSelection } from "./composables/leaflet/useRectangleSelection";
+import { getAggregatedSamples } from "./esri/imageServer/esriGetSamples";
 const zoomScale = 1; 
 
 // const zoomScale = 0.5; // for matplibre-gl
@@ -1375,12 +1447,80 @@ const {
   locationMarker
 } = useLocationMarker(map,  showLocationMarker.value);
 
+// implement rectangle and point
+const { active: rectangleActive, selectionInfo } = useRectangleSelection(map, "red");
+const loadingSamples = ref<string | false>(false);
+const sampleResults = ref<Record<number, { value: number | null; date: Date }> | null>(null);
+const sampleError = ref<string | null>(null);
+const sampleDialog = ref(false);
+const pointSampleResult = ref<Record<number, { value: number | null; date: Date }> | null>(null);
+const pointSampleError = ref<string | null>(null);
+const loadingPointSample = ref<string | false>(false);
+
+function fetchRectangleSamples() {
+  if (!selectionInfo.value) return;
+  loadingSamples.value = "loading";
+  sampleError.value = null;
+  sampleResults.value = null;
+  sampleDialog.value = true;
+  // Use current selected day for start/end
+  const start = singleDateSelected.value.setHours(0, 0, 0, 0);
+  const end = singleDateSelected.value.setHours(23, 59, 59, 999);
+  getAggregatedSamples(
+    'https://gis.earthdata.nasa.gov/image/rest/services/C2930763263-LARC_CLOUD/TEMPO_NO2_L3_V03_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer',
+    "NO2_Troposphere",
+    selectionInfo.value,
+    start,
+    end
+  ).then((samples) => {
+    sampleResults.value = samples;
+    loadingSamples.value = "finished";
+  }).catch((error) => {
+    sampleError.value = error?.message || String(error);
+    loadingSamples.value = "error";
+  });
+}
+
+
+function fetchCenterPointSample() {
+  if (!selectionInfo.value) return;
+  loadingPointSample.value = "loading";
+  pointSampleError.value = null;
+  pointSampleResult.value = null;
+  sampleDialog.value = true;
+  // Calculate center point
+  const { xmin, xmax, ymin, ymax } = selectionInfo.value;
+  const x = (xmin + xmax) / 2;
+  const y = (ymin + ymax) / 2;
+  const center = { x, y };
+  const start = singleDateSelected.value.setHours(0, 0, 0, 0);
+  const end = singleDateSelected.value.setHours(23, 59, 59, 999);
+  getAggregatedSamples(
+    'https://gis.earthdata.nasa.gov/image/rest/services/C2930763263-LARC_CLOUD/TEMPO_NO2_L3_V03_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer',
+    "NO2_Troposphere",
+    center,
+    start,
+    end
+  ).then((samples) => {
+    pointSampleResult.value = samples;
+    loadingPointSample.value = "finished";
+  }).catch((error) => {
+    pointSampleError.value = error?.message || String(error);
+    loadingPointSample.value = "error";
+  });
+}
+
+watch(selectionInfo, (info) => console.log(info));
+
+
 
 
 onMounted(() => {
   window.addEventListener("hashchange", updateHash);
   showSplashScreen.value = false;
   createMap();
+  
+  rectangleActive.value = true;
 
   usezoomhome(map, homeState.value.loc, homeState.value.zoom, (_e: Event) => {
     sublocationRadio.value = null;
@@ -2377,6 +2517,11 @@ ul {
     grid-column: 3 / 4;
     grid-row: 2 / 3;
   }
+  
+  #sample-info {
+    grid-column: 3 / 4;
+    grid-row: 3 / 5;
+  }
 
   #logo-title {
     display: flex;
@@ -2474,6 +2619,15 @@ a {
   flex-direction: column;
   justify-content: flex-start;
   gap: 5px;
+}
+
+#sample-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 0.5rem;
+  border-radius: 10px;
 }
 
 #date-radio {
@@ -3077,4 +3231,4 @@ canvas.maplibregl-canvas {
   background-color: whitesmoke;
 }
 </style>
-  
+
