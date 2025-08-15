@@ -15,7 +15,7 @@
         @click="updateCustomRange"
       >
         <v-icon class="mr-2">mdi-update</v-icon>
-        Update Custom Range
+        Add Custom Range
       </v-btn>
 
       <!-- Selection Type Radio Buttons -->
@@ -32,6 +32,11 @@
         <v-radio 
           label="Date Range" 
           value="daterange"
+          density="compact"
+        />
+        <v-radio 
+          label="Single Date" 
+            value="singledate"
           density="compact"
         />
       </v-radio-group>
@@ -151,14 +156,35 @@
         </div>
       </v-expand-transition>
 
+      <!-- Single Date Section -->
+      <v-expand-transition>
+        <div v-if="selectionType === 'singledate'" class="single-date-section">
+          <div class="mb-4">
+            <label class="text-subtitle-2 mb-2 d-block">Date</label>
+            <date-picker
+              ref="singleDateCalendar"
+              :model-value="singleDateObj"
+              @internal-model-change="handleSingleDateChange"
+              :allowed-dates="allowedDates"
+              :format="formatDateDisplay"
+              :preview-format="formatDateDisplay"
+              :clearable="false"
+              text-input
+              :teleport="true"
+              dark
+            />
+          </div>
+        </div>
+      </v-expand-transition>
+
       <!-- Timeline Visualization -->
-      <v-divider class="my-4" />
+      <!-- <v-divider class="my-4" />
       
       <TimelineVisualization
         :ranges="ranges"
         :selected-timezone="selectedTimezone"
         :mode="selectionType"
-      />
+      /> -->
     </v-card-text>
   </v-card>
 </template>
@@ -170,7 +196,6 @@ import DatePicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css';
 import { useTimezone } from './useTimezone';
 import { useDateTimeSelector } from './useDateTimeSelector';
-import TimelineVisualization from './TimelineVisualization.vue';
 import type { MillisecondRange } from '../types/datetime';
 
 // === INTERFACES === 
@@ -186,7 +211,7 @@ const props = defineProps<{
 
 // === EMITS ===
 const emit = defineEmits<{
-  'ranges-change': [ranges: MillisecondRange[]]
+  'ranges-change': [ranges: MillisecondRange[], selectionType: string]
 }>();
 
 // === COMPOSABLE SETUP ===
@@ -212,6 +237,10 @@ const {
   setEndTimestamp: setEndTimestampInternal,
   dayNames,
   generateMillisecondRanges,
+  // single date additions
+  singleDate,
+  setSingleDateTimestamp,
+  generateSingleDateRange
 } = useDateTimeSelector({
   currentDate: currentDateRef,
   selectedTimezone: timezoneRef
@@ -221,12 +250,14 @@ const {
 const weekdayCalendar = ref();
 const startDateCalendar = ref();
 const endDateCalendar = ref();
+const singleDateCalendar = ref();
 
-// === COMPUTED PROPERTIES ===
+// === PICKER STATE ===
 // Direct date objects for date pickers - no unnecessary timestamp conversion
 const weekdayStartDateObj = ref<Date | null>(null);
 const startDateObj = ref<Date | null>(null);
 const endDateObj = ref<Date | null>(null);
+const singleDateObj = ref<Date | null>(null);
 
 // Day options for v-select
 const dayOptions = computed(() => 
@@ -234,9 +265,9 @@ const dayOptions = computed(() =>
 );
 
 // Generate ranges for visualization
-const ranges = computed(() => {
-  return generateMillisecondRanges();
-});
+// const ranges = computed(() => {
+//   return generateMillisecondRanges();
+// });
 
 // Validation rules
 const instanceRules = computed(() => [
@@ -246,8 +277,10 @@ const instanceRules = computed(() => [
 // === METHODS ===
 // Update custom range button handler
 function updateCustomRange() {
-  const currentRanges = generateMillisecondRanges();
-  emit('ranges-change', currentRanges);
+  const currentRanges = selectionType.value === 'singledate'
+    ? generateSingleDateRange()
+    : generateMillisecondRanges();
+  emit('ranges-change', currentRanges, selectionType.value);
 }
 
 // Date change handlers
@@ -286,6 +319,14 @@ function handleEndDateChange(value: Date) {
   }
 }
 
+function handleSingleDateChange(value: Date) {
+  if (value && value.getTime() !== singleDateObj.value?.getTime()) {
+    singleDateObj.value = value;
+    setSingleDateTimestamp(value.getTime());
+    singleDateCalendar.value?.closeMenu();
+  }
+}
+
 // Formatting functions
 // Formatting functions moved to useTimezone composable
 
@@ -313,6 +354,10 @@ onMounted(() => {
   if (weekdayStartDate.value) {
     weekdayStartDateObj.value = new Date(weekdayStartDate.value + 'T00:00:00');
   }
+
+  if (singleDate.value > 0 && !singleDateObj.value) {
+    singleDateObj.value = new Date(singleDate.value);
+  }
 });
 
 // === WATCHERS ===
@@ -330,6 +375,18 @@ watch(() => weekdayStartDate.value, (newDateString) => {
   const newDate = newDateString ? new Date(newDateString + 'T00:00:00') : null;
   if (newDate?.getTime() !== weekdayStartDateObj.value?.getTime()) {
     weekdayStartDateObj.value = newDate;
+  }
+});
+
+// Keep singleDateObj in sync with the composable's singleDate
+watch(() => singleDate.value, (newTs) => {
+  if (newTs > 0) {
+    const newDate = new Date(newTs);
+    if (newDate.getTime() !== singleDateObj.value?.getTime()) {
+      singleDateObj.value = newDate;
+    }
+  } else {
+    singleDateObj.value = null;
   }
 });
 
@@ -359,7 +416,8 @@ watch(() => endDate.value, (newTimestamp) => {
 
 /* === SECTION STYLES === */
 .weekday-pattern-section,
-.date-range-section {
+.date-range-section,
+.single-date-section {
   /* Section-specific styles */
 }
 

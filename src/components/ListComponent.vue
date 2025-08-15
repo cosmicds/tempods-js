@@ -1,7 +1,7 @@
 <template>
   <section class="selection-list">
     <header class="selection-header">
-      <h3>Selected Regions</h3>
+      <h3>Selections</h3>
       <v-btn
         size="x-small"
         icon="mdi-plus"
@@ -9,30 +9,29 @@
         aria-label="Add new selection"
       />
     </header>
-    
+
     <ul class="selection-items">
       <li v-if="filteredSelectionOptions.length === 0" class="selection-placeholder">
-        Select a region on the map
+        Create a selection (region + time + molecule)
       </li>
       <li
-        v-for="(sel, idx) in filteredSelectionOptions"
-        :key="sel.id ?? idx"
+        v-for="sel in filteredSelectionOptions"
+        :key="sel.id"
         @click="select(sel)"
         class="selection-item"
-        :style="sel.color ? { '--selection-color': sel.color } : {}"
+        :style="sel.region?.color ? { '--selection-color': sel.region.color } : {'--selection-color': '#aaa'}"
       >
         <label class="selection-label">
           <input
             type="radio"
-            name="region-selection"
+            name="user-selection"
             :value="sel"
             v-model="modelValue"
             @change="select(sel)"
           />
           <span class="selection-name">{{ sel.name }}</span>
-          <span v-if="sel.timeRange" class="selection-time">
-            {{ formatTimeRange(sel.timeRange) }}
-          </span>
+          <span class="selection-molecule" v-if="sel.molecule">{{ sel.molecule }}</span>
+          <span class="selection-time" v-if="sel.timeRange">{{ formatTimeRange(sel.timeRange.range) }}</span>
         </label>
       </li>
     </ul>
@@ -41,35 +40,36 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits, computed, defineModel } from 'vue';
-import { RectangleSelection, MappingBackends } from '@/types';
+import { UserSelection } from '@/types';
 
-type RectangleSelectionType = Omit<RectangleSelection<MappingBackends>, "layer"> | null;
-const modelValue = defineModel<RectangleSelectionType>('modelValue');
-const props = defineProps<{ selectionOptions: RectangleSelectionType[], selectionActive?: boolean }>();
-const emits = defineEmits(['edit-selection', 'create-new']);
+// Model (v-model) for currently selected UserSelection
+const modelValue = defineModel<UserSelection | null>('modelValue');
+
+const props = defineProps<{ selectionOptions: (UserSelection | null)[], selectionActive?: boolean }>();
+const emits = defineEmits<{
+  (e: 'edit-selection', sel: UserSelection | null): void;
+  (e: 'create-new'): void;
+}>();
 
 const filteredSelectionOptions = computed(() =>
-  props.selectionOptions.filter(sel => sel !== null)
+  props.selectionOptions.filter((sel): sel is UserSelection => sel !== null)
 );
 
-// Function to format time range for display - from TempoLite.vue
-function formatTimeRange(ranges:  { start: number; end: number } |  { start: number; end: number }[]): string {
+function formatTimeRange(ranges: { start: number; end: number } | { start: number; end: number }[]): string {
   if (Array.isArray(ranges)) {
-    if (ranges.length === 0) return 'No time range set';
+    if (ranges.length === 0) return 'No time range';
     if (ranges.length === 1) {
-      const range = ranges[0];
-      return `${new Date(range.start).toLocaleDateString()} - ${new Date(range.end).toLocaleDateString()}`;
+      const r = ranges[0];
+      return `${new Date(r.start).toLocaleDateString()} - ${new Date(r.end).toLocaleDateString()}`;
     }
-    const allStarts = ranges.map(r => r.start);
-    const allEnds = ranges.map(r => r.end);
-    const minStart = Math.min(...allStarts);
-    const maxEnd = Math.max(...allEnds);
-    return `${new Date(minStart).toLocaleDateString()} - ${new Date(maxEnd).toLocaleDateString()} (${ranges.length} ranges)`;
+    const starts = ranges.map(r => r.start);
+    const ends = ranges.map(r => r.end);
+    return `${new Date(Math.min(...starts)).toLocaleDateString()} - ${new Date(Math.max(...ends)).toLocaleDateString()} (${ranges.length})`;
   }
   return `${new Date(ranges.start).toLocaleDateString()} - ${new Date(ranges.end).toLocaleDateString()}`;
 }
 
-function select(sel: RectangleSelectionType) {
+function select(sel: UserSelection) {
   if (modelValue.value !== sel) {
     modelValue.value = sel;
     emits('edit-selection', sel);
@@ -81,6 +81,8 @@ function select(sel: RectangleSelectionType) {
 .selection-list {
   font-size: 0.9em;
   max-height: 200px;
+  display: flex;
+  flex-direction: column;
 }
 
 .selection-header {
@@ -99,6 +101,7 @@ function select(sel: RectangleSelectionType) {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow-y: auto;
 }
 
 .selection-item {
@@ -106,25 +109,22 @@ function select(sel: RectangleSelectionType) {
   cursor: pointer;
   background: var(--selection-color, transparent);
   padding: 0.25em 0.5em;
+  border-radius: 4px;
 }
 
 .selection-label {
-  /* updated to inline layout */
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.5em;
 }
 
-.selection-name {
-  /* no extra formatting */
-}
+.selection-name { }
 
-.selection-time {
-  /* updated sub-label inline */
-  font-size: 0.75em;
+.selection-time, .selection-molecule {
+  font-size: 0.7em;
   opacity: 0.7;
-  margin-left: 0.5em;
+  margin-left: 0.25em;
 }
 
 .selection-placeholder {
@@ -134,6 +134,4 @@ function select(sel: RectangleSelectionType) {
   font-size: 0.85em;
   color: #666;
 }
-
-
 </style>

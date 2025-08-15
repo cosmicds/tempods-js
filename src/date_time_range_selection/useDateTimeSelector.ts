@@ -33,7 +33,8 @@ export function useDateTimeSelector(
     formatTime 
   } = useTimezone(selectedTimezone);
   
-  const selectionType = ref<SelectionType>('weekday');
+  // Extend selection type locally to include 'singledate' without altering global type
+  const selectionType = ref<SelectionType | 'singledate'>('weekday');
   
   // Weekday selection state
   const selectedDayOfWeek = ref<number>(1); // Default to Monday
@@ -77,6 +78,8 @@ export function useDateTimeSelector(
   function generateMillisecondRanges(): MillisecondRange[] {
     if (selectionType.value === 'weekday') {
       return generateWeekdayRanges();
+    } else if (selectionType.value === 'singledate') {
+      return generateSingleDateRange();
     } else {
       return generateDateRangeRanges();
     }
@@ -143,12 +146,39 @@ export function useDateTimeSelector(
     }];
   }
   
+  // Single date (timestamp at timezone-local midnight) state
+  const singleDate = ref<number>(0);
+  
+  function setSingleDateTimestamp(ts: number) {
+    // Normalize to midnight in the selected timezone
+    const midnightTs = setToMidnight(new Date(ts));
+    singleDate.value = midnightTs;
+  }
+  
+  // Initialize singleDate from parent currentDate if not already set
+  if (singleDate.value === 0) {
+    const initialParentTs = currentDate?.value?.getTime();
+    if (initialParentTs) {
+      setSingleDateTimestamp(initialParentTs);
+    }
+  }
+  
+  function generateSingleDateRange(): MillisecondRange[] {
+    if (singleDate.value === 0) return [];
+    const start = singleDate.value;
+    const end = setToEndOfDay(new Date(singleDate.value));
+    return [{ start, end }];
+  }
 
   // Watch for currentDate changes and update weekdayStartDateTimestamp if not manually set
   if (currentDate) {
     watch(currentDate, (newCurrentDate) => {
       if (!hasManualWeekdayStartDate.value) {
         weekdayStartDateTimestamp.value = newCurrentDate.getTime();
+      }
+      // If singleDate not manually set yet (still 0), default it from parent
+      if (singleDate.value === 0) {
+        setSingleDateTimestamp(newCurrentDate.getTime());
       }
     });
   }
@@ -161,6 +191,7 @@ export function useDateTimeSelector(
     instancesBack,
     dayNames,
     timePlusMinus,
+    singleDate,
     
     // Computed properties for date picker integration
     weekdayStartDate,
@@ -171,6 +202,7 @@ export function useDateTimeSelector(
     setWeekdayStartTimestamp,
     setStartTimestamp: (timestamp: number) => { startDate.value = timestamp; },
     setEndTimestamp: (timestamp: number) => { endDate.value = timestamp; },
+    setSingleDateTimestamp,
     
     // Timezone utilities
     setToMidnight,
@@ -178,6 +210,7 @@ export function useDateTimeSelector(
     
     // Utilities
     generateMillisecondRanges,
-    formatTime
+    formatTime,
+    generateSingleDateRange
   };
 }

@@ -9,7 +9,7 @@ import type {
   EsriInterpolationMethod, 
   CEsriTimeseries 
 } from '../types';
-import type { AggValue, DataPointError } from "../../types";
+import type { AggValue, DataPointError, MillisecondRange } from "../../types";
 
 // ============================================================================
 // TYPES
@@ -23,18 +23,14 @@ export interface FetchOptions {
   sliceID?: string | number;
 }
 
-export interface TimeRange {
-  start: number;
-  end: number;
-}
 
-export type TimeRanges = TimeRange | TimeRange[];
+export type TimeRanges = MillisecondRange | MillisecondRange[];
 
 export interface RawSampleData {
   samples: CEsriTimeseries[];
   metadata: {
     totalSamples: number;
-    timeRange: TimeRange | TimeRange[];
+    timeRange: MillisecondRange | MillisecondRange[];
     geometry: RectBounds | PointBounds;
     geometryType: 'rectangle' | 'point';
   };
@@ -150,7 +146,7 @@ export class TempoDataService {
    */
   async fetchSample(
     geometry: RectBounds | PointBounds,
-    timeRange: TimeRange,
+    timeRange: MillisecondRange,
     options: FetchOptions = {}
   ): Promise<RawSampleData> {
     const esriGeometry = this.isRectBounds(geometry) 

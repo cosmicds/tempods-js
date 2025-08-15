@@ -190,8 +190,8 @@
         :drag-predicate="(element: HTMLElement) => element.closest('.plotly') == null"
       >
         <timeseries-graph
-          v-if="selections.length > 0"
-          :data="selections"
+          v-if="userSelections.length > 0"
+          :data="userSelections"
         />
       </cds-dialog> -->
 
@@ -760,21 +760,13 @@
           </cds-dialog>
           <ListComponent 
             :selectionOptions="selectionOptions" 
-            v-model="selection as RectangleSelectionType" 
+            v-model="selection" 
             :selectionActive="selectionActive" 
             @edit-selection="editSelection" 
             @create-new="createNewSelection" 
           />
           <!-- Add Time Series button -->
-          <v-btn 
-            v-if="selection && selectionHasSamples(selection as RectangleSelectionType)" 
-            size="small" 
-            color="success" 
-            @click="copySelectionWithNewTimeRange(selection as RectangleSelectionType)"
-            :disabled="loadingSamples === 'loading'"
-          >
-            + New Time Series <br/>for Current Selection
-          </v-btn>
+          <!-- Legacy 'add time series' button removed after refactor to immutable UserSelection -->
           
           <v-select
             v-model="selection"
@@ -792,14 +784,14 @@
 
           <v-list>
             <v-list-item
-              v-for="(sel, index) in selections"
+              v-for="sel in selections"
               :title="sel.name"
-              :key="index"
-              :color="sel.color"
+              :key="sel.id"
+              :color="sel.region.color"
             >
               <template #subtitle>
                 <span v-if="sel.timeRange" class="text-caption">
-                  {{ getTimeRangeDisplay(sel as RectangleSelectionType) }}
+                  {{ getTimeRangeDisplay(sel) }}
                 </span>
               </template>
               <template #append>
@@ -812,7 +804,7 @@
                       v-bind="props"
                       size="x-small"
                       icon="mdi-pencil"
-                      @click="() => editSelection(sel as RectangleSelectionType)"
+                      @click="() => editSelection(sel)"
                     ></v-btn>
                   </template>
                 </v-tooltip>
@@ -827,7 +819,7 @@
                       :loading="loadingSamples === sel.name"
                       :disabled="sel.samples != null"
                       icon="mdi-download"
-                      @click="() => fetchDataForSelection(sel as RectangleSelectionType)"
+                      @click="() => fetchDataForSelection(sel)"
                     ></v-btn>
                   </template>
                 </v-tooltip>
@@ -841,7 +833,7 @@
                       size="x-small"
                       :loading="loadingPointSample === sel.name"
                       icon="mdi-image-filter-center-focus"
-                      @click="() => fetchCenterPointDataForSelection(sel as RectangleSelectionType)"
+                      @click="() => fetchCenterPointDataForSelection(sel)"
                     ></v-btn>
                   </template>
                 </v-tooltip>
@@ -854,7 +846,7 @@
                       v-bind="props"
                       size="x-small"
                       icon="mdi-trash-can"
-                      @click="() => deleteSelection(sel as RectangleSelectionType)"
+                      @click="() => deleteSelection(sel)"
                     ></v-btn>
                   </template>
                 </v-tooltip>
@@ -877,33 +869,13 @@
             <v-card variant="outlined" class="pa-3">
               <v-card-title class="text-subtitle-1 pa-0 mb-2">Time Range for New Selections</v-card-title>
               
-                            <!-- Binary choice radio buttons -->
-              <v-radio-group v-model="useCustomTimeRange" row density="compact" class="mb-3">
-                <v-radio 
-                  :value="false" 
-                  label="Current Day"
-                  density="compact"
-                />
-                <v-radio 
-                  :value="true" 
-                  label="Custom Range"
-                  density="compact"
-                />
-              </v-radio-group>
-              
               <!-- Effective time range display -->
               <div class="mt-2">
                 <v-chip size="small" :color="useCustomTimeRange ? 'success' : 'info'">
-                  {{ useCustomTimeRange ? 'Custom' : 'Current Day' }}: {{ effectiveTimeRangeDisplay }}
+                  {{ effectiveTimeRangeDisplay }}
                 </v-chip>
               </div>
               
-              <!-- Current selection info -->
-              <div v-if="selection" class="mt-2">
-                <v-chip size="small" color="info">
-                  Selection: {{ getTimeRangeDisplay(selection as RectangleSelectionType) }}
-                </v-chip>
-              </div>
             </v-card>
           </div>
   
@@ -970,7 +942,72 @@
           :data="selections"
         />
         
+        <!-- Selection Composition UI -->
+        <v-card >
+          <v-card-title class="d-flex justify-space-between">
+            <h3>Compose Selection</h3>
+            <v-chip size="x-small" color="primary" variant="tonal">{{ creationProgress.count }}/3</v-chip>
+          </v-card-title>
 
+          <v-card-text class="d-flex flex-column ga-3">
+            <!-- Region Picker -->
+            <v-select
+              :items="availableRegions.map(r => ({ title: r.name, value: r }))"
+              :model-value="draftUserSelection.region"
+              @update:model-value="setDraftSelectionRegion($event as RectangleSelectionType)"
+              label="Region"
+              :disabled="selectionActive"
+              item-title="title"
+              item-value="value"
+              density="compact"
+              hide-details
+              variant="outlined"
+            />
+
+            <!-- Molecule Picker -->
+            <v-select
+              :items="availableMolecules.map(m => ({ title: m.title, value: m.key }))"
+              :model-value="draftUserSelection.molecule"
+              @update:model-value="setDraftSelectionMolecule($event)"
+              label="Molecule"
+              item-title="title"
+              item-value="value"
+              density="compact"
+              hide-details
+              variant="outlined"
+            />
+
+            <!-- Time Range Picker: offer Effective (current day/custom) and any active custom ranges -->
+            <v-select
+              :items="timeRangeOptions"
+              :model-value="draftUserSelection.timeRange"
+              @update:model-value="setDraftSelectionTimeRange($event)"
+              label="Time Range"
+              item-title="title"
+              item-value="value"
+              density="compact"
+              hide-details
+              variant="outlined"
+            />
+
+            <v-progress-linear :model-value="creationProgress.percent" height="6" color="primary" rounded></v-progress-linear>
+
+            <div class="d-flex ga-2">
+              <v-btn
+                color="primary"
+                :disabled="creationProgress.count < 3"
+                @click="composeSelection"
+                size="small"
+              >Create Selection</v-btn>
+              <v-btn
+                color="secondary"
+                variant="tonal"
+                size="small"
+                @click="() => { draftUserSelection.region = null; draftUserSelection.timeRange = null; draftUserSelection.molecule = null; }"
+              >Reset</v-btn>
+            </div>
+          </v-card-text>
+        </v-card>
         
         <date-time-range-selection
           :current-date="singleDateSelected"
@@ -1050,7 +1087,7 @@ import changes from "./changes";
 import { useBounds } from './composables/useBounds';
 import { interestingEvents } from "./interestingEvents";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { AggValue, LatLngPair, InitMapOptions, RectangleSelectionInfo, RectangleSelection, RectangleType, MappingBackends } from "./types";
+import { AggValue, LatLngPair, InitMapOptions, RectangleSelectionInfo, RectangleSelection, RectangleType, MappingBackends, TimeRange, UserSelection } from "./types";
 import type { MillisecondRange } from "./types/datetime";
 import ListComponent from "./components/ListComponent.vue";
 import UserGuide from "./components/UserGuide.vue";
@@ -1633,17 +1670,14 @@ const {
 } = useLocationMarker(map,  showLocationMarker.value);
 
 
-type SelectionOption = RectangleSelectionType | null;
-const selections = ref<RectangleSelectionType[]>([]);
-function updateSelections() {
-  selections.value = [...selections.value];
-}
-function addToSelections(sel: RectangleSelectionType) {
-  (selections.value as RectangleSelectionType[]).push(sel);
-  updateSelections(); // to trigger reactivity in watchers
-  return selections.value[selections.value.length - 1];
-}
-const selection = ref<SelectionOption>(null);
+const regions = ref<RectangleSelectionType[]>([]);
+let regionCount = 0;
+
+// Selections now are UserSelection objects directly
+type UserSelectionType = UserSelection;
+type SelectionOption = UserSelectionType | null;
+const selections = ref<UserSelectionType[]>([]);
+const selection = ref<UserSelectionType | null>(null);
 const selectedIndex = computed({
   get() {
     const selectedID = selection.value?.id;
@@ -1658,32 +1692,34 @@ const selectedIndex = computed({
     }
   }
 });
-function  setSelection(sel: RectangleSelectionType | null) {
-  // returns the correspondin selection from within the selections array
-  // maybe this is unecessary. we don't use the returned value
-  // but maybe somewhere we would want it. idk if the input "sel" is
-  // identical to the value from the array (I arrays just store a reference)
+function setSelection(sel: UserSelectionType | null) {
   if (sel === null) {
     selection.value = null;
     selectedIndex.value = null;
     return null;
-  } else {
-    selection.value = sel;
-    const idx = selections.value.findIndex(s => s.id === sel.id);
-    if (idx == -1) {
-      // must already be in selections, so throw an error if that is not true
-      throw new Error(`Selection with ID ${sel.id} and name ${sel.name} not found in selections.`);
-    }
-    selectedIndex.value = idx;
-    return selections.value[selectedIndex.value] ?? null;
   }
+  const idx = selections.value.findIndex(s => s.id === sel.id);
+  if (idx == -1) {
+    // must already be in selections, so throw an error if that is not true
+    throw new Error(`Selection with ID ${sel.id} and name ${sel.name} not found in selections.`);
+  }
+  selection.value = selections.value[idx];
+  selectedIndex.value = idx;
+  return selection.value;
 }
+function addUserSelection(sel: UserSelectionType) {
+  selections.value = [...selections.value, sel];
+  return sel;
+}
+// Track total created selections for unique naming
 const selectionOptions = computed<SelectionOption[]>(() => ([null] as SelectionOption[]).concat(selections.value as SelectionOption[]));
-let selectionCount = 0;
+let selectionCount = 0; // for naming selections
+// Removed timeRangeCount/timeRangeNameMap and dedup logic; we'll just append custom ranges and always keep a current day option.
+let timeRangeCount = 0;
 const samplesGraph = ref(false);
 const haveSamples = computed(() => selections.value.some(s => s.samples));
 
-// I stole this from here: https://sashamaps.net/docs/resources/20-colors/
+// Simple deterministic color palette (unused in composition now but kept for future region coloring if needed)
 const COLORS = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0',
   '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8',
@@ -1708,7 +1744,7 @@ const loadingPointSample = ref<string | false>(false);
 
 // UI state for time range management
 
-const useCustomTimeRange = ref(false); // Binary choice: false = current day, true = custom range
+const useCustomTimeRange = ref(true); // Binary choice: false = current day, true = custom range
 
 // Store markers for timeseries locations
 const timeseriesMarkerApi = useMultiMarker(map, {
@@ -1731,7 +1767,7 @@ function addTimeseriesLocationsToMap(timeseries: Array<{ x: number; y: number }>
   console.log(`Adding ${timeseries.length} timeseries locations to map`);
 }
 
-function selectionHasSamples(sel: RectangleSelectionType): boolean {
+function selectionHasSamples(sel: UserSelectionType): boolean {
   console.log(`Checking if selection ${sel.name} has samples:`, sel.samples);
   const has = (sel.samples !== undefined) && Object.keys(sel.samples).length > 0;
   if (has) {
@@ -1742,54 +1778,53 @@ function selectionHasSamples(sel: RectangleSelectionType): boolean {
   return has;
 }
 
-function setCurrentSelectionTimeRange(timeRange: MillisecondRange | MillisecondRange[]) {
-  console.log(`Setting time range for current selection:`);
-  if (selection.value && selectedIndex.value !== null) {
-    if (selectionHasSamples(selection.value as RectangleSelectionType)) {
-      console.error("Cannot set time range for selection with existing samples. Please clear samples first (disabled).");
-      return;
-    } else {
-      // Store the time range in the selection
-      selection.value.timeRange = timeRange;
-      selections.value[selectedIndex.value].timeRange = timeRange; // Update the selection in the array too
-      console.log(`Set time range for selection ${selection.value.name}:`, timeRange);
-      updateSelections();
-      return;
-    }
-  } else {
-    console.error("No current selection to set time range for.");
-    return;
-  }
-  // eslint-disable-next-line no-unreachable
-  console.error("how did i get here???");
-}
 
 
-// Add custom time range ref
-const customTimeRange = ref<MillisecondRange | MillisecondRange[] | null>(null);
+// Replace primitive customTimeRange with TimeRange object
+// OLD:
+// const customTimeRange = ref<MillisecondRange | MillisecondRange[] | null>(null);
+const customTimeRange = ref<TimeRange | null>(null);
 
-// This only handles the the change event from the DateTimeRangeSelection component.
-// We always want it's output in customTimeRange so we can use it if ncessary
-function handleDateTimeRangeSelectionChange(timeRanges: MillisecondRange[]) {
-  if (timeRanges.length === 0) {
+// Add TimeRange object support for custom time ranges, update handler to accept (ranges, selectionType), name and describe new custom ranges, and adjust dependent logic.
+function handleDateTimeRangeSelectionChange(timeRanges: MillisecondRange[], selectionType?: string) {
+  if (!Array.isArray(timeRanges) || timeRanges.length === 0) {
     console.error('No time ranges received from DateTimeRangeSelection');
     return;
   }
-  
-  console.log(`Received ${timeRanges.length} time range(s) from DateTimeRangeSelection:`, timeRanges);
-  // with this set, effectiveTimeRange will check if we are using a custom time range
-  // and if so, will update the current selection time (if samples have not been fetched yet)
-  // else will get the option to add a new time series
-  customTimeRange.value = timeRanges; 
-  timeRanges.forEach((range, index) => {
-    console.log(`  Range ${index + 1}: ${new Date(range.start).toLocaleDateString()} to ${new Date(range.end).toLocaleDateString()}`);
-  });
+  const normalized = atleast1d(timeRanges);
+  // No dedup tracking now
+  // Build description based on selection type
+  let descriptionBase = 'Custom';
+  switch (selectionType) {
+  case 'weekday':
+    descriptionBase = 'Weekday Pattern';
+    break;
+  case 'daterange':
+    descriptionBase = 'Date Range';
+    break;
+  case 'singledate':
+    descriptionBase = 'Single Date';
+    break;
+  }
+  const description = `${descriptionBase} (${formatTimeRange(normalized)})`;
+  timeRangeCount += 1;
+  const tr: TimeRange = {
+    id: v4(),
+    name: `Custom Range ${timeRangeCount}`,
+    description,
+    range: normalized.length === 1 ? normalized[0] : normalized
+  };
+  customTimeRange.value = tr;
+  useCustomTimeRange.value = true;
+  // Add to available list if new (compare by serialized range key)
+  availableTimeRanges.value.push(tr); // always append
+  console.log(`Registered ${tr.name}: ${tr.description}`);
 }
 
 // Computed property for effective time range based on user selection
 const effectiveTimeRange = computed<MillisecondRange[]>(() => {
   if (useCustomTimeRange.value && customTimeRange.value) {
-    return atleast1d(customTimeRange.value);
+    return atleast1d(customTimeRange.value.range);
   } else {
     // Use current day as default
     const day = new Date(singleDateSelected.value);
@@ -1797,11 +1832,6 @@ const effectiveTimeRange = computed<MillisecondRange[]>(() => {
     const end = day.setHours(23, 59, 59, 999);
     return [{ start, end }];
   }
-});
-
-watch(effectiveTimeRange, (newRange) => {
-  console.log(`Effective time range changed: ${newRange.length} range(s). Attempting to set current selection time range.`);
-  setCurrentSelectionTimeRange(newRange);
 });
 
 
@@ -1814,14 +1844,17 @@ function activateSelectionMode() {
 // clear all the data from the current selection
 // This is not used right now, but it is useful to have
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function clearSelectionSamples(sel: RectangleSelectionType) {
+function clearSelectionSamples(sel: UserSelectionType) {
   sel.samples = undefined;
   sel.errors = undefined;
-  sel.timeRange = undefined;
 }
 
 // edit the region of the given selection.
-function editSelection(sel: RectangleSelectionType) {
+function editSelection(sel: UserSelectionType | null) {
+  if (sel === null) {
+    console.error("Cannot edit a null selection.");
+    return;
+  }
   if (selectionHasSamples(sel)) {
     console.error("Cannot edit selection with existing samples.");
     return;
@@ -1846,20 +1879,14 @@ function createNewSelection() {
 }
 
 // Unified fetching methods
-async function fetchDataForSelection(sel: RectangleSelectionType) {
+async function fetchDataForSelection(sel: UserSelectionType) {
   loadingSamples.value = sel.name;
   sampleError.value = null;
   
-  // we want to always have a timeRange set here.
-  if (!sel.timeRange) {
-    throw new Error(`No time range set for selection ${sel.name}`);
-  }
-  // because of the thrown error above, sel.timeRange is guaranteed to be set here. 
-  // so we will never use the effectiveTimeRange fallback, but we keep it here for safety.
-  const timeRanges = atleast1d(sel.timeRange) ?? effectiveTimeRange.value;
+  const timeRanges = atleast1d(sel.timeRange.range);
   
   try {
-    const data = await tempoDataService.fetchTimeseriesData(sel.rectangle, timeRanges);
+    const data = await tempoDataService.fetchTimeseriesData(sel.region.geometryInfo, timeRanges);
     sel.samples = data.values;
     sel.errors = data.errors;
     loadingSamples.value = "finished";
@@ -1871,28 +1898,20 @@ async function fetchDataForSelection(sel: RectangleSelectionType) {
   }
 }
 
-async function fetchCenterPointDataForSelection(_sel: RectangleSelectionType) {
+// New: fetch data for composed UserSelection
+// fetchDataForSelection already handles UserSelection
+
+async function fetchCenterPointDataForSelection(_sel: UserSelectionType) {
   loadingSamples.value = _sel.name;
   sampleError.value = null;
   
-  if (!_sel.timeRange) {
-    throw new Error(`No time range set for selection ${_sel.name}`);
-  }
-  
-  const sel = copyAndUseSelection(_sel);
-  sel.name = `${_sel.name} (Center Point)`;
-  
-  if (!sel.timeRange) { // have to do the check again for type checker
-    throw new Error(`No time range set for selection ${sel.name}`);
-  }
-  loadingSamples.value = sel.name;
-  const timeRanges = atleast1d(sel.timeRange) ?? effectiveTimeRange.value;
+  const timeRanges = atleast1d(_sel.timeRange.range);
   
   
   try {
-    const data = await tempoDataService.fetchCenterPointData(sel.rectangle, timeRanges);
+    const data = await tempoDataService.fetchCenterPointData(_sel.region.geometryInfo, timeRanges);
     if (data) {
-      sel.samples = data.values;
+      _sel.samples = data.values;
       loadingSamples.value = "finished";
       console.log(`Fetched center point data for ${timeRanges.length} time range(s)`);
       addTimeseriesLocationsToMap(data.locations);
@@ -1905,78 +1924,121 @@ async function fetchCenterPointDataForSelection(_sel: RectangleSelectionType) {
 
 
 
-// Create a new selection with a time range
-function createSelectionWithTimeRange(rectangle: RectangleSelectionInfo, timeRanges?: MillisecondRange | MillisecondRange[]): RectangleSelectionType {
-  const color = COLORS[selectionCount % COLORS.length];
+// Selection Composition 
+interface DraftUserSelection {
+  region?: RectangleSelectionType | null;
+  timeRange?: MillisecondRange | MillisecondRange[] | null;
+  molecule?: MoleculeType | null;
+}
+const draftUserSelection = ref<DraftUserSelection>({ region: null, timeRange: null, molecule: null });
+
+function createDraftSelection(info: RectangleSelectionInfo) {
+  const color = COLORS[regionCount % COLORS.length];
+  regionCount += 1;
+  const { layer } = addRectangleLayer(map.value!, info, color);
+  const newRegion: RectangleSelectionType = {
+    id: v4(),
+    name: `Region ${regionCount}`,
+    geometryInfo: info,
+    color,
+    layer: layer as RectangleSelectionType['layer']
+  };
+  regions.value = [...(regions.value as RectangleSelectionType[]), newRegion];
+  console.log(`Created region ${newRegion.name}`);
+}
+
+
+
+const availableRegions = computed(() => regions.value);
+const availableMolecules = computed(() => moleculeOptions.map(o => ({ key: o.value as MoleculeType, title: o.title })));
+// Time ranges maintained as a list of TimeRange objects
+const availableTimeRanges = ref<TimeRange[]>([]);
+
+// Dedup helper removed (no longer needed)
+
+// dedup avaialbeTimeRange and add in the effective time range (which is an old way of storing the current time range)
+// Always-present current day option at index 0
+const currentDayTimeRange = computed<TimeRange>(() => {
+  const offset = getTimezoneOffset(selectedTimezone.value, singleDateSelected.value);
+  const day = singleDateSelected.value.getTime() - offset;
+  const start = day - (day % 86400000) - offset; // Start of the day in milliseconds
+  const end = start + (86400000 - 1); // End of the day in milliseconds
+  return {
+    id: 'current-day',
+    name: 'Current Day',
+    description: `Current Day (${new Date(start).toLocaleDateString()})`,
+    range: { start, end }
+  };
+});
+
+watch(currentDayTimeRange, (val) => {
+  // console.log(singleDateSelected.value, getTimezoneOffset(selectedTimezone.value, singleDateSelected.value), val,);
+  if (!availableTimeRanges.value.length) {
+    availableTimeRanges.value.push(val);
+  } else {
+    availableTimeRanges.value[0] = val;
+  }
+}, { immediate: true });
+
+// Public composition progress
+const creationProgress = computed(() => {
+  let count = 0;
+  if (draftUserSelection.value.region) count += 1;
+  if (draftUserSelection.value.timeRange) count += 1;
+  if (draftUserSelection.value.molecule) count += 1;
+  return { count, percent: (count / 3) * 100 };
+});
+
+function resetDraftSelection() {
+  draftUserSelection.value = { region: null, timeRange: null, molecule: null };
+}
+
+function composeSelection(): UserSelectionType | null {
+  // const color = COLORS[selectionCount % COLORS.length]; // we will use the color from the region
+  
+  const draft = draftUserSelection.value;
+  if (!draft.region || !draft.timeRange || !draft.molecule) {
+    console.error('Draft selection incomplete');
+    return null;
+  }
+  
   selectionCount += 1;
   
-  const _timeRanges = (timeRanges ? atleast1d(timeRanges) : timeRanges)  ?? effectiveTimeRange.value;
-  
-  console.log(`Creating selection with ${_timeRanges.length} time range(s)`);
-  _timeRanges.forEach((range, index) => {
-    console.log(`  Range ${index + 1}: ${new Date(range.start)} to ${new Date(range.end)}`);
-  });
-  
-  const { layer } = addRectangleLayer(map.value!, rectangle, color);
-  const newSelection: RectangleSelectionType = {
+  const timeRanges = atleast1d(draft.timeRange);
+  // Add to available list if new custom
+  const timeRange: TimeRange = { id: v4(), name: 'Selection Range', description: formatTimeRange(timeRanges), range: timeRanges.length === 1 ? timeRanges[0] : timeRanges };
+  const sel: UserSelectionType = {
     id: v4(),
-    name: `Selection ${selectionCount}`,
-    rectangle,
-    layer,
-    color,
-    timeRange: _timeRanges.length === 1 ? _timeRanges[0] : _timeRanges,
+    region: draft.region, // as { id: string; name: string; rectangle: RectangleSelectionInfo; color: string; layer?: unknown },
+    timeRange,
+    molecule: draft.molecule as MoleculeType,
+    name: `Selection ${selectionCount}`
   };
-
-  // Add to selections array
-  addToSelections(newSelection);
-  
-  // set this as the current selection
-  setSelection(newSelection);
-  
-  console.log(`Created new selection ${newSelection.name} with ${_timeRanges.length} time range(s)`);
-  return selections.value[selections.value.length - 1] as RectangleSelectionType;
+  addUserSelection(sel);
+  setSelection(sel);
+  resetDraftSelection();
+  return sel;
 }
 
-
-// Add time series to existing selection - copy the selection and set a new time range
-// TODO: contains a lot of the createSelectionWithTimeRange. Should be possible to refactor these to use a common api
-function copySelectionWithNewTimeRange(existingSelection: RectangleSelectionType, timeRanges?: MillisecondRange | MillisecondRange[], name?: string): RectangleSelectionType {
-  const color = COLORS[selectionCount % COLORS.length];
-  selectionCount += 1;
-  
-  // allow the user to pass in a time range manually
-  const _timeRanges = (timeRanges ? atleast1d(timeRanges) : timeRanges)  ?? effectiveTimeRange.value;
-  
-  const newSelection: RectangleSelectionType = {
-    id: v4(),
-    name: name ?? `${existingSelection.name} (Copy)`,
-    rectangle: existingSelection.rectangle,
-    layer: existingSelection.layer, // Share the same layer
-    color,
-    timeRange: _timeRanges.length === 1 ? _timeRanges[0] : _timeRanges,
-  };
-
-  // Add to selections array
-  addToSelections(newSelection);
-  
-  // set this as the current selection
-  setSelection(newSelection);
-  
-  console.log(`Added time series to selection ${newSelection.name} with ${_timeRanges.length} time range(s)`);
-  return newSelection;
+function setDraftSelectionRegion(region: RectangleSelectionType | null) {
+  (draftUserSelection.value.region as RectangleSelectionType | null) = region || null;
 }
 
-function copyAndUseSelection(sel: RectangleSelectionType) {
-  // Create a new selection with the same rectangle and time range
-  const copiedSelection = copySelectionWithNewTimeRange(sel, sel.timeRange, `${sel.name} (Center Point)`);
-  
-  // Set the new selection as current
-  setSelection(copiedSelection);
-  
-  console.log(`Copied and using selection: ${copiedSelection.name}`);
-  return copiedSelection;
+function setDraftSelectionMolecule(molecule: MoleculeType | null) {
+  draftUserSelection.value.molecule = molecule || null;
 }
 
+function setDraftSelectionTimeRange(range: MillisecondRange | MillisecondRange[] | null) {
+  draftUserSelection.value.timeRange = range || null;
+}
+
+// Options for time range dropdown sourced from availableTimeRanges (TimeRange objects)
+const timeRangeOptions = computed(() => availableTimeRanges.value.map(tr => ({ title: tr.description || tr.name, value: tr.range })));
+
+watch(timeRangeOptions, (newOptions,) => {
+  // Log the change in time range options
+  console.log(`Time range options changed:`, newOptions);
+});
 
 watch(selections, (newSelections, oldSelections) => {
   // just log out the length difference
@@ -2006,11 +2068,11 @@ function formatTimeRange(ranges: MillisecondRange | MillisecondRange[]): string 
     return `${new Date(ranges.start).toLocaleDateString()} - ${new Date(ranges.end).toLocaleDateString()}`;
   }
 }
-function getTimeRangeDisplay(sel: RectangleSelectionType): string {
-  if (!sel.timeRange) {
+function getTimeRangeDisplay(sel: UserSelectionType): string {
+  if (!sel.timeRange || !sel.timeRange.range) {
     return `No time range set for selection ${sel.name}`;
   }
-  return formatTimeRange(sel.timeRange);
+  return formatTimeRange(sel.timeRange.range);
 }
 
 // Computed property for effective time range display
@@ -2018,17 +2080,14 @@ const effectiveTimeRangeDisplay = computed(() => {
   return formatTimeRange(effectiveTimeRange.value);
 });
 
-
-
-function deleteSelection(sel: RectangleSelectionType) {
+function deleteSelection(sel: UserSelectionType) {
   const index = selections.value.findIndex(s => s.id == sel.id);
   if (index < 0) {
     return;
   }
   const isSelected = selectedIndex.value === index;
-  if (map.value && sel.layer) {
-    // @ts-expect-error -- sel.layer has the correct type
-    removeRectangleLayer(map.value, sel.layer);
+  if (map.value && sel.region.layer) {
+    removeRectangleLayer(map.value, sel.region.layer);
   }
   selections.value.splice(index, 1);
   if (isSelected) {
@@ -2117,8 +2176,6 @@ const thumbLabel = computed(() => {
   }
   return `${date.value.getUTCMonth() + 1}/${dateObj.getUTCDate()}/${dateObj.getUTCFullYear()} ${hourValue}:${dateObj.getUTCMinutes().toString().padStart(2, '0')} ${amPm}`;
 });
-
-
 
 
 function updateHash() {
@@ -2585,8 +2642,6 @@ watch(useHighRes, () => {
   imagePreload();
 });
 
-
-
 watch(showFieldOfRegard, (_show: boolean) => {
   fieldOfRegardToggled = true;
 });
@@ -2727,15 +2782,21 @@ watch(selectionInfo, (info: RectangleSelectionInfo | null) => {
   }
   
   if (selection.value === null || selectedIndex.value === null) {
-    // Create a new selection with time range using the unified function
-    createSelectionWithTimeRange(info);
+    createDraftSelection(info);
+    // // Create a new region only (no selection yet)
+    // regionCount += 1;
+    // const color = COLORS[(regionCount - 1) % COLORS.length];
+    // const { layer } = addRectangleLayer(map.value, info, color);
+    // regions.value = [...regions.value, region];
+    // draftUserSelection.value.region = region; // pre-fill draft with new region
+    // console.log(`Created region ${region.name}`);
   } else {
     // Update the existing selection
     const currentSelection = selections.value[selectedIndex.value];
-    currentSelection.rectangle = info;
+    currentSelection.region.geometryInfo = info;
     currentSelection.samples = undefined; // Clear existing data
     // explicit type
-    const rect = currentSelection.layer as RectangleSelectionType['layer'];
+    const rect = currentSelection.region.layer as RectangleSelectionType['layer'];
     if (rect) {
       updateRectangleBounds(rect, info);
     }
@@ -2754,12 +2815,14 @@ watch(useCustomTimeRange, (useCustom) => {
     // If switching to custom but no custom range is set, set a default
     const start = singleDateSelected.value.setHours(0, 0, 0, 0);
     const end = singleDateSelected.value.setHours(23, 59, 59, 999);
-    customTimeRange.value = { start, end };
+    customTimeRange.value = {
+      id: v4(),
+      name: `Time Range ${timeRangeCount}`,
+      description: `Current Day (${new Date(start).toLocaleDateString()})`,
+      range: [{ start, end }]
+    };
   }
 });
-
-// Watch for custom time range input changes
-
 </script>
   
 <style lang="less">
@@ -3491,7 +3554,6 @@ button:focus-visible,
 //  mobile styles
 
 // ========= DEFINE MOBILE STYLES =========
-// KEEP THEM ALL HERE
 @media (max-width: 1180px) {
 
   .content-with-sidebars {

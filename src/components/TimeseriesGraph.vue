@@ -14,11 +14,11 @@ import { onMounted, ref, watch } from "vue";
 import { v4 } from "uuid";
 import { PlotlyHTMLElement, newPlot, type Data, type Datum, type PlotMouseEvent } from "plotly.js-dist-min";
 
-import { AggValue, RectangleSelection, MappingBackends } from "../types";
+import { AggValue, UserSelection } from "../types";
 
 
 interface TimeseriesProps {
-  data: Omit<RectangleSelection<MappingBackends>[], 'layer'>;
+  data: UserSelection[]; // composed selections
 }
 
 const props = defineProps<TimeseriesProps>();
@@ -57,6 +57,9 @@ function renderPlot() {
   props.data.forEach(data => {
     const samples = data.samples;
     if (!samples) { return; }
+    // derive color from region if present
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    const regionColor = (data as any).region?.color;
     const ts = Object.keys(samples).sort();
     const dataT: Date[] = [];
     const dataV: (number | null)[] = [];
@@ -77,9 +80,7 @@ function renderPlot() {
       mode: "lines+markers",
       legendgroup: legendGroup,
       name: data.name,
-      marker: {
-        color: data.color,
-      },
+      marker: { color: regionColor },
     });
 
     const errors = data.errors;
@@ -110,9 +111,7 @@ function renderPlot() {
         line: { width: 0 },
         showlegend: false,
         legendgroup: legendGroup,
-        marker: {
-          color: data.color,
-        },
+        marker: { color: regionColor },
       });
 
       plotlyData.push({
@@ -123,9 +122,7 @@ function renderPlot() {
         fill: "tonexty",
         showlegend: false,
         legendgroup: legendGroup,
-        marker: {
-          color: data.color,
-        },
+        marker: { color: regionColor },
       });
     }
   });

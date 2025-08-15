@@ -127,11 +127,30 @@ export interface MillisecondRange {
 export interface RectangleSelection<T extends MappingBackends> {
   id: string;
   name: string;
-  rectangle: RectangleSelectionInfo;
+  geometryInfo: RectangleSelectionInfo; // renamed from rectangle for future shape generalization
   color: string;
   layer?: RectangleType<T>;
   source?: GeoJSONSource;
+}
+
+
+export interface TimeRange {
+  id: string;
+  name: string; // user editable
+  description: string; // not editable
+  range: MillisecondRange | MillisecondRange[];
+}
+
+
+
+
+export interface UserSelection {
+  id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  region: any;
+  timeRange: TimeRange;
+  molecule: string;
+  name: string; // not user editable
   samples?: Record<number, AggValue>;
   errors?: Record<number, DataPointError>;
-  timeRange?: MillisecondRange | MillisecondRange[];
 }
