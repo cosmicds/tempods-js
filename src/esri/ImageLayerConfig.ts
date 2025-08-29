@@ -52,7 +52,7 @@ export const stretches = {
 } as Record<Variables, [number, number]>;
 export const colorramps = {
   'NO2_Troposphere': 'Magma',
-  'Ozone_Column_Amount': 'Inferno', 
+  'Ozone_Column_Amount': 'Cividis', 
   'HCHO': 'Viridis',
 } as Record<Variables, ColorRamps>;
 

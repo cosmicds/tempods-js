@@ -3426,7 +3426,7 @@ a {
   height: fit-content;
   align-self: center;
   padding-inline: 0.5rem;
-  margin-left: 0.75rem;
+  // margin-left: 0.75rem;
   width: 2.5rem;
   color: var(--accent-color);
   border: 2px solid var(--accent-color);
