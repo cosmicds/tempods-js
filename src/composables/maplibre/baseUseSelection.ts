@@ -49,6 +49,7 @@ export function baseUseSelection<SelectionInfo>(
     const mMap = map.value;
     if (mMap !== null) {
       updateListeners(mMap, nowActive);
+      mMap.getCanvas().style.cursor = nowActive ? 'crosshair' : '';
     }
   });
 

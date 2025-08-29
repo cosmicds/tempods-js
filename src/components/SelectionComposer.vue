@@ -191,6 +191,16 @@ function reset() {
 watch(selectedTimeRange, (timeRange: TimeRange | null) => {
   setDraftSelectionTimeRange(timeRange?.range ?? null);
 });
+
+// just watch the id's. using a 'deep' watch caused a significant performance hit
+watch(() => props.regions.map(r => r.id), (newRegions) => {
+  if (draftUserSelection.value.region) {
+    const exists = newRegions.find(rid => rid === draftUserSelection.value.region?.id);
+    if (!exists) {
+      draftUserSelection.value.region = null;
+    }
+  }
+});
 </script>
 
 <style scoped>

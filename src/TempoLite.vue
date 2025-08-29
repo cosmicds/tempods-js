@@ -2036,7 +2036,7 @@ function editRegionName(region: UnifiedRegionType) {
   // Set the region to edit
   const existing = (regions.value as UnifiedRegionType[]).find(r => r.id === region.id);
   if (!existing) {
-    console.error(`Selection with ID ${region.id} not found.`);
+    console.error(`Region with ID ${region.id} not found.`);
     return;
   }
   regionBeingEdited.value = region;
@@ -2046,6 +2046,7 @@ function editRegionName(region: UnifiedRegionType) {
 function setRegionName(region: UnifiedRegionType, newName: string) {
   if (newName.trim() === '') {
     console.error("Region name cannot be empty.");
+    regionBeingEdited.value = null;
     return;
   }
   const existing = (regions.value as UnifiedRegionType[]).find(r => r.name === newName && r.id !== region.id);
@@ -2055,6 +2056,7 @@ function setRegionName(region: UnifiedRegionType, newName: string) {
   }
   region.name = newName;
   console.log(`Renamed ${region.geometryType} region to: ${newName}`);
+  regionBeingEdited.value = null;
 }
 
 function deleteRegion(region: UnifiedRegionType) {
@@ -2630,6 +2632,7 @@ function handleSelectionRegionEdit(info: RectangleSelectionInfo) {
   console.log(`Updated existing selection: ${currentSelection.name} (time range unchanged)`);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function handleRegionEdit(info: RectangleSelectionInfo | PointSelectionInfo) {
   if (regionBeingEdited.value) {
     regionBeingEdited.value.geometryInfo = info;
@@ -2649,8 +2652,22 @@ function handleRegionEdit(info: RectangleSelectionInfo | PointSelectionInfo) {
   regionBeingEdited.value = null;
 }
 
+function rectangleIsDegenerate(info: RectangleSelectionInfo): boolean {
+  return info.xmax === info.xmin || info.ymax === info.ymin;
+}
 watch(rectangleInfo, (info: RectangleSelectionInfo | null) => {
   if (info === null || map.value === null) {
+    rectangleSelectionActive.value = false;
+    return;
+  }
+  if (rectangleIsDegenerate(info)) {
+    // make it a point selection instead
+    // TODO: only implement when we have a solution to only do this on a double-click
+    // pointInfo.value = {
+    //   x: info.xmin,
+    //   y: info.ymin
+    // };
+    rectangleSelectionActive.value = false;
     return;
   }
   const canCreate = (selection.value === null || selectedIndex.value === null) && !regionBeingEdited.value;
@@ -2658,7 +2675,8 @@ watch(rectangleInfo, (info: RectangleSelectionInfo | null) => {
     createDraftSelection(info, 'rectangle');
     rectangleSelectionActive.value = false;
   } else {
-    handleRegionEdit(info);
+    return;
+    // handleRegionEdit(info);
   }
   
   // do not permit editing a region on a selection
@@ -2670,6 +2688,7 @@ watch(rectangleInfo, (info: RectangleSelectionInfo | null) => {
 // Add watcher for point selection
 watch(pointInfo, (info: PointSelectionInfo | null) => {
   if (info === null || map.value === null) {
+    pointSelectionActive.value = false;
     return;
   }
   const canCreate = (selection.value === null || selectedIndex.value === null) && !regionBeingEdited.value;
@@ -2677,7 +2696,8 @@ watch(pointInfo, (info: PointSelectionInfo | null) => {
     createDraftSelection(info, 'point');
     pointSelectionActive.value = false;
   } else {
-    handleRegionEdit(info);
+    return;
+    // handleRegionEdit(info);
   }
 });
 
