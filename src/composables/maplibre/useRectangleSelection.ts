@@ -84,10 +84,10 @@ export function useRectangleSelection(
 
       const eventCoords = event.lngLat;
       handler.selectionInfo.value = {
-        xmin: startCoords.lng,
-        ymin: startCoords.lat,
-        xmax: eventCoords.lng,
-        ymax: eventCoords.lat,
+        xmin: Math.min(startCoords.lng, eventCoords.lng),
+        ymin: Math.min(startCoords.lat, eventCoords.lat),
+        xmax: Math.max(startCoords.lng, eventCoords.lng),
+        ymax: Math.max(startCoords.lat, eventCoords.lat),
       };
 
       if (rectangleLayer) {

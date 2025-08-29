@@ -1,5 +1,5 @@
-import { LatLng, LatLngBounds, Map, Rectangle, CircleMarker } from "leaflet";
-import { RectangleSelectionInfo } from "../../types";
+import { LatLng, LatLngBounds, LatLngBoundsExpression, Map, Rectangle, CircleMarker } from "leaflet";
+import { RectangleSelectionInfo, UnifiedRegion } from "../../types";
 
 
 function createBounds(info: RectangleSelectionInfo): LatLngBounds {
@@ -71,4 +71,19 @@ export function removePointLayer(
   layer: CircleMarker,
 ) {
   map.removeLayer(layer);
+}
+
+export function regionBounds(region: UnifiedRegion<"leaflet">): [[number, number], [number, number]] {
+  const pointPadding = 1;
+  return region.geometryType == "rectangle" ?
+    [[region.geometryInfo.ymin, region.geometryInfo.xmin], [region.geometryInfo.ymax, region.geometryInfo.xmax]] :
+    [[region.geometryInfo.y - pointPadding, region.geometryInfo.x - pointPadding], [region.geometryInfo.y + pointPadding, region.geometryInfo.x + pointPadding]];
+}
+
+export function fitBounds(map: Map, bounds: LatLngBoundsExpression, fly = true) {
+  if (fly) {
+    map.flyToBounds(bounds);
+  } else {
+    map.fitBounds(bounds);
+  }
 }

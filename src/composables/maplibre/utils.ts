@@ -1,7 +1,7 @@
-import { GeoJSONSource, Map } from "maplibre-gl";
+import { GeoJSONSource, LngLatBoundsLike, Map } from "maplibre-gl";
 import { v4 } from "uuid";
 
-import { RectangleSelectionInfo, PointSelectionInfo } from "../../types";
+import { RectangleSelectionInfo, PointSelectionInfo, UnifiedRegion } from "../../types";
 
 const layerGetter = (m: Map, id: string) => m.getLayer(id);
 export type LayerType = Exclude<ReturnType<typeof layerGetter>, undefined>;
@@ -146,4 +146,15 @@ export function removePointLayer(
 ) {
   map.removeLayer(layer.id);
   map.removeSource(layer.id);
+}
+
+export function regionBounds(region: UnifiedRegion<"maplibre">): [[number, number], [number, number]] {
+  const pointPadding = 1;
+  return region.geometryType == "rectangle" ?
+    [[region.geometryInfo.xmin, region.geometryInfo.ymin], [region.geometryInfo.xmax, region.geometryInfo.ymax]] :
+    [[region.geometryInfo.x - pointPadding, region.geometryInfo.y - pointPadding], [region.geometryInfo.x + pointPadding, region.geometryInfo.y + pointPadding]];
+}
+
+export function fitBounds(map: Map, bounds: LngLatBoundsLike, _fly: boolean) {
+  map.fitBounds(bounds);
 }

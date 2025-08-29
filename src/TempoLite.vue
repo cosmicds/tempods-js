@@ -655,8 +655,8 @@
           </div>
 
           <div id="dataset-sections">
+            <h2>Time-Series Graphs</h2>
             <div id="add-region-time">
-              <h2>Add Region/Time Range</h2>  
               <v-expansion-panels
                 v-model="openPanels"
                 variant="accordion"
@@ -685,7 +685,7 @@
                         <template #prepend>
                           <v-icon v-if="!rectangleSelectionActive" icon="mdi-select"></v-icon>
                         </template>
-                        {{ rectangleSelectionActive ? "Cancel" : "Add Region" }}
+                        {{ rectangleSelectionActive ? "Cancel" : "New Region" }}
                       </v-btn>
                       <v-btn
                         size="small"
@@ -702,7 +702,7 @@
                         <template #prepend>
                           <v-icon v-if="!pointSelectionActive" icon="mdi-plus"></v-icon>
                         </template>
-                        {{ pointSelectionActive ? "Cancel" : "Add Point" }}
+                        {{ pointSelectionActive ? "Cancel" : "New Point" }}
                       </v-btn>
                     </div>
                     <v-list>
@@ -711,6 +711,7 @@
                         :key="index"
                         :title="region.name"
                         :style="{ 'background-color': region.color }"
+                        @click="() => moveMapToRegion(region as UnifiedRegionType)"
                       >
                         <template #append>
                           <!-- New: Edit Geometry button (disabled if any selection using region has samples) -->
@@ -755,7 +756,7 @@
                       <template #prepend>
                         <v-icon v-if="!createTimeRangeActive" icon="mdi-plus"></v-icon>
                       </template>
-                      {{ createTimeRangeActive ? "Cancel" : "Create Time Range" }}
+                      {{ createTimeRangeActive ? "Cancel" : "New Time Range" }}
                     </v-btn>
                     <date-time-range-selection
                       v-if="createTimeRangeActive"
@@ -778,7 +779,6 @@
             </div>
 
             <div id="selections">
-              <h2>Create a Dataset</h2>
               <v-btn
                 size="small"
                 :active="createSelectionActive"
@@ -1165,7 +1165,7 @@ import { MapBoxFeature, MapBoxFeatureCollection, geocodingInfoForSearch } from "
 import changes from "./changes";
 import { useBounds } from './composables/useBounds';
 import { interestingEvents } from "./interestingEvents";
-import { LatLngPair, InitMapOptions, RectangleSelectionInfo, PointSelectionInfo, PointSelection, RectangleSelection, MappingBackends, TimeRange, UserSelection } from "./types";
+import { LatLngPair, InitMapOptions, RectangleSelectionInfo, PointSelectionInfo, PointSelection, RectangleSelection, UnifiedRegion, MappingBackends, TimeRange, UserSelection } from "./types";
 import type { MillisecondRange } from "./types/datetime";
 import UserGuide from "./components/UserGuide.vue";
 import SampleTable from "./components/SampleTable.vue";
@@ -1183,7 +1183,7 @@ import TimeChips from "./components/TimeChips.vue";
 // import { useFieldOfRegard} from "./composables/leaflet/useFieldOfRegard";
 // import { useLocationMarker } from "./composables/leaflet/useMarker";
 // import { useRectangleSelection } from "./composables/leaflet/useRectangleSelection";
-// import { addRectangleLayer, updateRectangleBounds, removeRectangleLayer } from "./composables/leaflet/utils";
+// import { addRectangleLayer, updateRectangleBounds, removeRectangleLayer, regionBounds, fitBounds } from "./composables/leaflet/utils";
 // import { useMultiMarker } from './composables/leaflet/useMultiMarker';
 // import { useEsriLayer } from "./esri/leaflet/useEsriImageLayer";
 // const zoomScale = 1; 
@@ -1198,7 +1198,7 @@ import { useLocationMarker } from "./composables/maplibre/useMarker";
 import { useRectangleSelection } from "./composables/maplibre/useRectangleSelection";
 import { addRectangleLayer, updateRectangleBounds, removeRectangleLayer } from "./composables/maplibre/utils";
 import { usePointSelection } from "./composables/maplibre/usePointSelection";
-import { addPointLayer, updatePointLocation, removePointLayer } from "./composables/maplibre/utils";
+import { addPointLayer, updatePointLocation, removePointLayer, regionBounds, fitBounds } from "./composables/maplibre/utils";
 import { useMultiMarker } from './composables/maplibre/useMultiMarker';
 import { useEsriLayer } from "./esri/maplibre/useEsriImageLayer";
 const zoomScale = 0.5; // for matplibre-gl
@@ -1206,10 +1206,11 @@ const zoomScale = 0.5; // for matplibre-gl
 
 
 const BACKEND: MappingBackends = "maplibre" as const;
+type BackendT = typeof BACKEND;
 
-type RectangleSelectionType = RectangleSelection<typeof BACKEND>;
-type PointSelectionType = PointSelection<typeof BACKEND>;
-type UnifiedRegionType = RectangleSelectionType | PointSelectionType;
+type RectangleSelectionType = RectangleSelection<BackendT>;
+type PointSelectionType = PointSelection<BackendT>;
+type UnifiedRegionType = UnifiedRegion<BackendT>;
 
 
 import { TempoDataService } from "./esri/services/TempoDataService";
@@ -1981,6 +1982,15 @@ function createDraftSelection(info: RectangleSelectionInfo | PointSelectionInfo,
   console.log(`Created ${geometryType} ${newSelection.name}`);
 }
 
+function moveMapToRegion(region: UnifiedRegionType) {
+  const mapV = map.value;
+  if (!mapV) {
+    return;
+  }
+
+  const bounds = regionBounds(region);
+  fitBounds(mapV, bounds, true);
+}
 
 
 const availableRegions = computed(() => regions.value);
