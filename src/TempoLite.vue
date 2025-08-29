@@ -566,11 +566,12 @@
                   <!-- time chips to select time specifically for esri times -->
                   <time-chips
                     v-if="whichMolecule.toLowerCase().includes('month')"
-                    :timestamps="esriTimesteps"
+                    :timestamps="esriTimesteps.slice(minIndex, maxIndex + 1)"
                     @select="handleEsriTimeSelected($event.value, $event.index)"
-                    reverse
-                    use-utc
-                    date-only
+                    :selected-index="timeIndex - minIndex"
+                    :use-utc="whichMolecule.toLowerCase().includes('month')"
+                    :date-only="whichMolecule.toLowerCase().includes('month')"
+                    :hour-only="!whichMolecule.toLowerCase().includes('month')"
                   />
                 </v-radio-group>
               </div>        
@@ -1545,7 +1546,8 @@ function handleEsriTimeSelected(timestamp:number, _index: number) {
   if (idx >= 0) {
     timeIndex.value = idx;
   }
-  singleDateSelected.value = new Date(timestamp);
+  // We may need something like this when we get back the monthly average service.
+  //singleDateSelected.value = new Date(timestamp);
 }
 
 watch(whichMolecule, (newMolecule) => {

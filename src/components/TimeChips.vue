@@ -106,8 +106,11 @@ const handleChipClick = (value: number, index: number) => {
 }
 
 .chips-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* display: grid; */
+  /* grid-template-columns: repeat(5, 1fr); */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
   gap: 8px;
   max-height: 276px;
   overflow-y: auto;
@@ -116,10 +119,11 @@ const handleChipClick = (value: number, index: number) => {
 
 
 .time-chip {
+  flex-basis: 15%;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 70px;
+  height: fit-content;
   padding: 8px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -138,7 +142,6 @@ const handleChipClick = (value: number, index: number) => {
 }
 
 .time-chip:active {
-  transform: translateY(0);
   background: #8cc5ff;
 }
 
