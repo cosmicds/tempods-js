@@ -42,25 +42,25 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits, computed, defineModel } from 'vue';
-import { UserSelection } from "../types";
+import { UserDataset } from "../types";
 import { formatTimeRange } from "../utils/timeRange";
 
 
-// Model (v-model) for currently selected UserSelection
-const modelValue = defineModel<UserSelection | null>('modelValue');
+// Model (v-model) for currently selected UserDataset
+const modelValue = defineModel<UserDataset | null>('modelValue');
 
-const props = defineProps<{ selectionOptions: (UserSelection | null)[], selectionActive?: boolean }>();
+const props = defineProps<{ selectionOptions: (UserDataset | null)[], selectionActive?: boolean }>();
 const emits = defineEmits<{
-  (e: 'edit-selection', sel: UserSelection | null): void;
+  (e: 'edit-selection', sel: UserDataset | null): void;
   (e: 'create-new'): void;
 }>();
 
 const filteredSelectionOptions = computed(() =>
-  props.selectionOptions.filter((sel): sel is UserSelection => sel !== null)
+  props.selectionOptions.filter((sel): sel is UserDataset => sel !== null)
 );
 
 
-function select(sel: UserSelection) {
+function select(sel: UserDataset) {
   if (modelValue.value !== sel) {
     modelValue.value = sel;
     emits('edit-selection', sel);

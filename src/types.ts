@@ -124,6 +124,15 @@ export interface DataPointError {
   upper: number | null;
 }
 
+// Dataset shape for PlotlyGraph (date-less or numeric x values allowed)
+export interface DataSet {
+  x: (number | Date | string | null)[]; // Plotly Datum subset
+  y: (number | null)[];
+  lower?: (number | null)[];
+  upper?: (number | null)[];
+  errorType?: 'bar' | 'band';
+}
+
 export interface MillisecondRange {
   start: number;
   end: number;
@@ -134,6 +143,7 @@ export interface TimeRange {
   name: string; // user editable
   description: string; // not editable
   range: MillisecondRange | MillisecondRange[];
+  type: string; 
 }
 
 export interface UserDataset {
@@ -146,6 +156,12 @@ export interface UserDataset {
   samples?: Record<number, AggValue>;
   errors?: Record<number, DataPointError>;
   locations?: {x: number, y: number}[];
+  // Optional folded data payload (stored raw so we avoid circular import with aggregation.ts)
+  // Shape expected: { foldType: string; values: Record<number, {value: number|null; bin: number}>; errors: Record<number, DataPointError>; bins?: unknown }
+  // Used when timeRange.type === 'folded'
+  folded?: unknown;
+  // Direct plotly datasets (preferred for folded or synthetic selections)
+  plotlyDatasets?: DataSet[];
 }
 
 export interface SelectionHandler<EventType, SelectionInfo> {

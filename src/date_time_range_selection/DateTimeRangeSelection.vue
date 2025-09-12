@@ -23,6 +23,11 @@
           value="weekday"
           density="compact"
         />
+        <v-radio 
+          label="Pattern (Days × Times)" 
+          value="pattern"
+          density="compact"
+        />
       </v-radio-group>
 
       <!-- Weekday Pattern Section -->
@@ -93,7 +98,7 @@
               label="Number of Instances"
               :rules="instanceRules"
               :min="1"
-              :max="10"
+              :max="104"
               density="compact"
               variant="outlined"
               control-variant="split"
@@ -138,6 +143,88 @@
               :teleport="true"
               dark
               :year-range="[allowedDates ? allowedDates[0].getFullYear() : 2023, allowedDates ? allowedDates[allowedDates.length - 1].getFullYear() : new Date().getFullYear()]"
+            />
+          </div>
+        </div>
+      </v-expand-transition>
+
+      <!-- Pattern Section (Multi-day, Multi-time) -->
+      <v-expand-transition>
+        <div v-if="selectionType === 'pattern'" class="pattern-section">
+          <!-- Days of Week Multi-toggle -->
+          <div class="mb-4">
+            <label class="text-subtitle-2 mb-2 d-block">Days of Week</label>
+            <!-- <v-btn-toggle
+              v-model="selectedDays"
+              multiple
+              density="compact"
+              class=""
+            >
+              <v-btn
+                v-for="(day, idx) in dayOptions"
+                :key="idx"
+                :value="day.value"
+                variant="tonal"
+                size="small"
+              >{{ day.title.slice(0,1) }}</v-btn>
+            </v-btn-toggle> -->
+            <!-- just do labeled checkboxes -->
+            <label v-for="(day, idx) in dayOptions" :key="idx" class="mr-3" style="text-wrap: nowrap;">
+              <input 
+                type="checkbox" 
+                :value="day.value" 
+                v-model="selectedDays" 
+              />
+              <span class="ml-1">{{ day.title.slice(0,3) }}</span>
+            </label>
+          </div>
+
+          <!-- Times Multi-select -->
+          <div class="mb-4">
+            <label class="text-subtitle-2 mb-2 d-block">Times</label>
+            <v-combobox
+              v-model="selectedTimes"
+              :items="timeOptions"
+              label="Add/select times"
+              multiple
+              chips
+              closable-chips
+              density="compact"
+              variant="outlined"
+              hide-details
+              hint="24h format HH:MM (e.g., 09:00, 14:30)"
+              persistent-hint
+              @update:model-value="normalizeTimes"
+            />
+            <div class="mt-2">
+              <v-chip size="small" color="primary" variant="tonal">
+                {{ selectedTimezone }}
+              </v-chip>
+              <span class="ml-2 text-caption">± hours</span>
+              <input 
+                v-model="timePlusMinus"
+                type="number"
+                min="-12"
+                max="12"
+                step="0.5"
+                class="time-input"
+                style="width: 80px;"
+                placeholder="± hours"
+              />
+            </div>
+          </div>
+
+          <!-- Instances -->
+          <div class="mb-4">
+            <v-number-input
+              v-model="instancesBack"
+              label="Number of Instances"
+              :rules="instanceRules"
+              :min="1"
+              :max="104"
+              density="compact"
+              variant="outlined"
+              control-variant="split"
             />
           </div>
         </div>
@@ -195,7 +282,7 @@ import DatePicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css';
 import { useTimezone } from '../composables/useTimezone';
 import { useDateTimeSelector } from './useDateTimeSelector';
-import type { MillisecondRange } from '../types/datetime';
+import type { MillisecondRange, TimeRangeSelectionType } from '../types/datetime';
 
 // === INTERFACES === 
 // === PROPS ===
@@ -205,12 +292,12 @@ const props = defineProps<{
   defaultStartDate?: Date;
   defaultEndDate?: Date;
   allowedDates?: Date[];
-  validTimes?: string[];
+  validTimes?: number[]; // timestamps
 }>();
 
 // === EMITS ===
 const emit = defineEmits<{
-  'ranges-change': [ranges: MillisecondRange[], selectionType: string]
+  'ranges-change': [ranges: MillisecondRange[], selectionType: TimeRangeSelectionType]
 }>();
 
 // === COMPOSABLE SETUP ===
@@ -239,7 +326,11 @@ const {
   // single date additions
   singleDate,
   setSingleDateTimestamp,
-  generateSingleDateRange
+  generateSingleDateRange,
+  // pattern additions
+  selectedDays,
+  selectedTimes,
+  generatePatternRanges
 } = useDateTimeSelector({
   currentDate: currentDateRef,
   selectedTimezone: timezoneRef
@@ -258,6 +349,29 @@ const startDateObj = ref<Date | null>(null);
 const endDateObj = ref<Date | null>(null);
 const singleDateObj = ref<Date | null>(null);
 
+// Pre-populated time options (every hour from 6am-9pm; user can add custom HH:MM)
+const timeOptions = ref<string[]>(Array.from({ length: 15 }, (_, h) => `${String(h+6).padStart(2, '0')}:00`));
+// // Compute available time options based on min/max hour in allowedDates in the selected timezone
+// causes a bit a performance degredation and offers 6-9pm for all data, so hard cord it. 
+// a better range would be from 9am - 5pm
+// const minMaxHours = computed(() => {
+//   const dates = props.validTimes ?? [];
+//   if (dates.length === 0) return { min: 0, max: 23 };
+//   const hours = dates.map(d => {
+//     return toTimezone(d).getHours();
+//   });
+//   const min = Math.min(...hours);
+//   const max = Math.max(...hours);
+//   return { min, max };
+// });
+
+// const timeOptions = computed<string[]>(() => {
+//   const { min, max } = minMaxHours.value;
+//   const count = max - min + 1;
+//   const hours = count > 0 ? Array.from({ length: count }, (_, i) => min + i) : Array.from({ length: 24 }, (_, i) => i);
+//   return hours.map(h => `${String(h).padStart(2, '0')}:00`);
+// });
+
 // Day options for v-select
 const dayOptions = computed(() => 
   dayNames.map((day, index) => ({ title: day, value: index }))
@@ -270,15 +384,20 @@ const dayOptions = computed(() =>
 
 // Validation rules
 const instanceRules = computed(() => [
-  (v: number) => v >= 1 && v <= 10 || 'Must be between 1 and 10'
+  (v: number) => v >= 1 && v <= 104 || 'Must be between 1 and 104 (2 years)'
 ]);
 
 // === METHODS ===
 // Update custom range button handler
 function updateCustomRange() {
-  const currentRanges = selectionType.value === 'singledate'
-    ? generateSingleDateRange()
-    : generateMillisecondRanges();
+  let currentRanges: MillisecondRange[] = [];
+  if (selectionType.value === 'singledate') {
+    currentRanges = generateSingleDateRange();
+  } else if (selectionType.value === 'pattern') {
+    currentRanges = generatePatternRanges();
+  } else {
+    currentRanges = generateMillisecondRanges();
+  }
   emit('ranges-change', currentRanges, selectionType.value);
 }
 
@@ -324,6 +443,36 @@ function handleSingleDateChange(value: Date) {
     setSingleDateTimestamp(value.getTime());
     singleDateCalendar.value?.closeMenu();
   }
+}
+
+// Normalize entered times to HH:MM 24h (flexible entry via copilot)
+function normalizeTimes(values: string[]) {
+  const normalized = values
+    .map(v => String(v).trim())
+    .map(v => {
+      // Accept HH, H, HH:MM, H:MM, also allow am/pm inputs like 9am, 2:30 PM
+      const lower = v.toLowerCase().replace(/\s+/g, '');
+      const ampmMatch = lower.match(/^(\d{1,2})(?::(\d{1,2}))?(am|pm)$/);
+      if (ampmMatch) {
+        let hour = parseInt(ampmMatch[1], 10);
+        const minute = ampmMatch[2] ? parseInt(ampmMatch[2], 10) : 0;
+        const suffix = ampmMatch[3];
+        if (suffix === 'pm' && hour < 12) hour += 12;
+        if (suffix === 'am' && hour === 12) hour = 0;
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      }
+      const m = lower.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+      if (!m) return null;
+      const h = parseInt(m[1], 10);
+      const mm = m[2] ? parseInt(m[2], 10) : 0;
+      if (isNaN(h) || h < 0 || h > 23) return null;
+      if (isNaN(mm) || mm < 0 || mm > 59) return null;
+      return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    })
+    .filter((v): v is string => !!v);
+  // Deduplicate
+  const unique = Array.from(new Set(normalized));
+  selectedTimes.value = unique;
 }
 
 // Formatting functions

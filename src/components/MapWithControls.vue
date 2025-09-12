@@ -218,7 +218,7 @@ import { Map } from "maplibre-gl";
 import { getTimezoneOffset } from "date-fns-tz";
 import { v4 } from "uuid";
 
-import type { LatLngPair, InitMapOptions, PointSelectionInfo, RectangleSelectionInfo, SelectionType } from "@/types";
+import type { LatLngPair, PointSelectionInfo, RectangleSelectionInfo, SelectionType } from "@/types";
 import { type MoleculeType, MOLECULE_OPTIONS } from "@/esri/utils";
 import { colorbarOptions } from "@/esri/ImageLayerConfig";
 import { colormap } from "@/colormaps/utils";
@@ -256,6 +256,7 @@ const {
   timeSliderUsedCount,
   playButtonClickedCount,
   timestamps,
+  timestampsLoaded,
   selectionActive,
   regionsCreatedCount,
   currentTempoDataService,
@@ -292,32 +293,13 @@ const onMapReady = (m: Map) => {
   map.value = m; // ESRI source already added by EsriMap
 };
 
-const zoomScale = 0.5; // for matplibre-gl
-const urlParams = new URLSearchParams(window.location.search);
-const initLat = parseFloat(urlParams.get("lat") || '40.044');
-const initLon = parseFloat(urlParams.get("lon") || '-98.789');
-const initZoom = parseFloat(urlParams.get("zoom") || `${4 * zoomScale}`); // 4 is the default zoom level for the map, multiplied by zoomScale for maplibre
-const initTime = urlParams.get("t");
-const initState = ref<InitMapOptions>({
-  loc: [initLat, initLon] as LatLngPair,
-  zoom: initZoom,
-  t: initTime ? +initTime : null
-});
-
-const homeLat = 40.044;
-const homeLon = -98.789;
-const homeZoom = 4 * zoomScale; // 4 is the default zoom level for the map, multiplied by zoomScale for maplibre
-const homeState = ref({
-  loc: [homeLat, homeLon] as LatLngPair,
-  zoom: homeZoom,
-  t: null as number | null
-});
-
 const showLocationMarker = ref(true);
 const {
   setMarker,
   removeMarker,
-  locationMarker
+  locationMarker,
+  initState,
+  homeState,
 } = useLocationMarker(map as Ref<Map | null>, showLocationMarker.value);
 
 const showFieldOfRegard = ref(false);
@@ -433,6 +415,7 @@ function onEsriTimestepsLoaded(steps: number[]) {
   if (timeIndex.value >= sorted.length) {
     timeIndex.value = 0;
   }
+  timestampsLoaded.value = true;
 }
 
 watch(playing, (val: boolean) => {

@@ -3,7 +3,8 @@ name: Build and Deploy
 on:
   push:
     branches:
-      main
+      - main
+      - dev
 
 jobs:
   build:
@@ -58,10 +59,46 @@ jobs:
         with:
           cmd: cat package.json | jq -r '.draft // false'
 
+      - name: Create folder for deployment
+        run: |
+          mkdir deployment
+          mkdir deployment/dev
+
+      - name: Move current build to deployment
+        id: prepare
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          echo "Current branch: ${BRANCH}"
+          [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
+          echo "Folder to use: ${folder}"
+          mv dist/* deployment/${folder}
+          [[ "$BRANCH" == "dev" ]] && other="main" || other="dev"
+          echo "Other branch: ${other}"
+          echo "other=${other}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the other branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.prepare.outputs.other }}
+          path: other
+
+      - name: Build other branch and move to deployment
+        env:
+          BRANCH: ${{ steps.prepare.outputs.other }}
+          VUE_APP_MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+          VUE_APP_CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
+        run: |
+          cd other
+          yarn install
+          yarn build
+          [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
+          mv dist/* ../deployment/${folder}
+
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         if: ${{ steps.draft.outputs.value }} == 'false'
         with:
           branch: gh-pages
-          folder: dist
+          folder: deployment 
           ssh-key: ${{ secrets.DEPLOY_KEY }}

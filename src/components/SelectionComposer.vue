@@ -36,7 +36,7 @@
       <!-- Region Picker -->
       <v-select
         :items="regions.map(r => ({ title: r.name, value: r }))"
-        :model-value="draftUserSelection.region"
+        :model-value="draftUserDataset.region"
         @update:model-value="setDraftSelectionRegion($event as RectangleSelectionType)"
         label="Region"
         :disabled="disabled?.region"
@@ -50,7 +50,7 @@
       <!-- Molecule Picker -->
       <v-select
         :items="availableMolecules.map(m => ({ title: m.title, value: m.key }))"
-        :model-value="draftUserSelection.molecule"
+        :model-value="draftUserDataset.molecule"
         @update:model-value="setDraftSelectionMolecule($event)"
         label="Molecule"
         :disabled="disabled?.molecule"
@@ -95,7 +95,7 @@
 import { computed, ref, watch } from "vue";
 import { v4 } from "uuid";
 
-import type { MappingBackends, RectangleSelection, TimeRange, UserSelection } from "../types";
+import type { MappingBackends, RectangleSelection, TimeRange, UserDataset } from "../types";
 import type { MillisecondRange } from "../types/datetime";
 import { type MoleculeType, MOLECULE_OPTIONS } from "../esri/utils";
 import { atleast1d } from "../utils/atleast1d";
@@ -113,46 +113,46 @@ interface SelectionComposerProps {
 const props = defineProps<SelectionComposerProps>();
 
 const emit = defineEmits<{
-  (event: "create", selection: UserSelection): void;
+  (event: "create", selection: UserDataset): void;
 }>();
 
 const loading = ref(false);
 
 type RectangleSelectionType = RectangleSelection<typeof props.backend>;
 
-interface DraftUserSelection {
+interface DraftUserDataset {
   region?: RectangleSelectionType | null;
   timeRange?: MillisecondRange | MillisecondRange[] | null;
   molecule?: MoleculeType | null;
 }
-const draftUserSelection = ref<DraftUserSelection>({ region: null, timeRange: null, molecule: null });
+const draftUserDataset = ref<DraftUserDataset>({ region: null, timeRange: null, molecule: null });
 const availableMolecules = computed(() => MOLECULE_OPTIONS.map(o => ({ key: o.value as MoleculeType, title: o.title })));
 
 // Public composition progress
 const creationProgress = computed(() => {
   let count = 0;
-  if (draftUserSelection.value.region) count += 1;
-  if (draftUserSelection.value.timeRange) count += 1;
-  if (draftUserSelection.value.molecule) count += 1;
+  if (draftUserDataset.value.region) count += 1;
+  if (draftUserDataset.value.timeRange) count += 1;
+  if (draftUserDataset.value.molecule) count += 1;
   return { count, percent: (count / 3) * 100 };
 });
 
 function setDraftSelectionRegion(region: RectangleSelectionType | null) {
-  (draftUserSelection.value.region as RectangleSelectionType | null) = region || null;
+  (draftUserDataset.value.region as RectangleSelectionType | null) = region || null;
 }
 
 function setDraftSelectionMolecule(molecule: MoleculeType | null) {
-  draftUserSelection.value.molecule = molecule || null;
+  draftUserDataset.value.molecule = molecule || null;
 }
 
 function setDraftSelectionTimeRange(range: MillisecondRange | MillisecondRange[] | null) {
-  draftUserSelection.value.timeRange = range || null;
+  draftUserDataset.value.timeRange = range || null;
 }
 
-async function composeSelection(): Promise<UserSelection | null> {
+async function composeSelection(): Promise<UserDataset | null> {
   // const color = COLORS[selectionCount % COLORS.length]; // we will use the color from the region
   
-  const draft = draftUserSelection.value;
+  const draft = draftUserDataset.value;
   if (!draft.region || !draft.timeRange || !draft.molecule) {
     console.error('Draft selection incomplete');
     return null;
@@ -160,8 +160,14 @@ async function composeSelection(): Promise<UserSelection | null> {
   
   const timeRanges = atleast1d(draft.timeRange);
   // Add to available list if new custom
-  const timeRange: TimeRange = { id: v4(), name: 'Selection Range', description: formatTimeRange(timeRanges), range: timeRanges.length === 1 ? timeRanges[0] : timeRanges };
-  const sel: UserSelection = {
+  const timeRange: TimeRange = { 
+    id: v4(), 
+    name: 'Selection Range', 
+    description: formatTimeRange(timeRanges), 
+    range: timeRanges.length === 1 ? timeRanges[0] : timeRanges,
+    type: selectedTimeRange.value?.type || 'custom'
+  };
+  const sel: UserDataset = {
     id: v4(),
     region: draft.region, // as { id: string; name: string; rectangle: RectangleSelectionInfo; color: string; layer?: unknown },
     timeRange,
@@ -173,7 +179,7 @@ async function composeSelection(): Promise<UserSelection | null> {
 
 
 function reset() {
-  draftUserSelection.value = { region: null, timeRange: null, molecule: null };
+  draftUserDataset.value = { region: null, timeRange: null, molecule: null };
   selectedTimeRange.value = null;
 }
 
@@ -183,10 +189,10 @@ watch(selectedTimeRange, (timeRange: TimeRange | null) => {
 
 // just watch the id's. using a 'deep' watch caused a significant performance hit
 watch(() => props.regions.map(r => r.id), (newRegions) => {
-  if (draftUserSelection.value.region) {
-    const exists = newRegions.find(rid => rid === draftUserSelection.value.region?.id);
+  if (draftUserDataset.value.region) {
+    const exists = newRegions.find(rid => rid === draftUserDataset.value.region?.id);
     if (!exists) {
-      draftUserSelection.value.region = null;
+      draftUserDataset.value.region = null;
     }
   }
 });

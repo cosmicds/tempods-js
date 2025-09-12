@@ -10,15 +10,15 @@
 
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { onMounted, computed, ref, watch } from "vue";
+import { onMounted, computed, ref, watch, nextTick } from "vue";
 import { v4 } from "uuid";
 import { PlotlyHTMLElement, newPlot, restyle, type Data, type Datum, type PlotMouseEvent } from "plotly.js-dist-min";
 
-import { AggValue, UserSelection } from "../types";
+import { AggValue, UserDataset } from "../types";
 
 
 interface TimeseriesProps {
-  data: UserSelection[]; // composed selections
+  data: UserDataset[]; // composed selections
   showErrors?: boolean;
 }
 
@@ -42,6 +42,7 @@ function datumToDate(datum: Datum): Date | null {
 
 const legendGroups: Record<string, string> = {};
 let errorTraces: number[] = [];
+const traceVisible = ref<Map<string, boolean>>(new Map());
 
 function renderPlot() {
 
@@ -78,6 +79,9 @@ function renderPlot() {
     max = Math.max(max, Math.max(...dataV.filter((v): v is number => v !== null)));
 
     const legendGroup = v4();
+    if (!traceVisible.value.has(data.id)) {
+      traceVisible.value.set(data.id, true);
+    }
     legendGroups[data.id] = legendGroup;
     plotlyData.push({
       x: dataT,
@@ -87,6 +91,7 @@ function renderPlot() {
       showlegend: true,
       name: data.region.name,
       marker: { color: regionColor },
+      visible: traceVisible.value.get(data.id) ? true : "legendonly",
     });
 
     const errors = data.errors;
@@ -122,7 +127,7 @@ function renderPlot() {
         legendgroup: legendGroup,
         name: data.region.name,
         marker: { color: regionColor },
-        visible: props.showErrors,
+        visible: props.showErrors && traceVisible.value.get(data.id),
       });
       errorTraces.push(plotlyData.length - 1);
 
@@ -136,7 +141,7 @@ function renderPlot() {
         legendgroup: legendGroup,
         name: data.region.name,
         marker: { color: regionColor },
-        visible: props.showErrors,
+        visible: props.showErrors && traceVisible.value.get(data.id),
       });
       errorTraces.push(plotlyData.length - 1);
     }
@@ -167,12 +172,51 @@ function renderPlot() {
         }
       });
     });
+    el.on('plotly_legendclick', (data) => {
+      const trace = plotlyData[data.curveNumber];
+      if (!trace) { 
+        console.error("No trace for legend click", data);
+        return true; 
+      }
+      // eslint-disable-next-line 
+      // @ts-ignore legend group should exist. but guard anyway
+      const group = trace.legendgroup as string;
+      if (!group) { 
+        console.error("No legend group for trace", trace);
+        return true; 
+      }
+      const dataId = Object.keys(legendGroups).find(key => legendGroups[key] === group);
+      if (!dataId) { 
+        console.error("Could not find data ID for legend group", group);
+        return true; 
+      }
+      const currentlyVisible = traceVisible.value.get(dataId);
+      traceVisible.value.set(dataId, !currentlyVisible);
+      // if currently visible and errors are visible set stlye the error traces too
+      nextTick(() => { // next tick so that updated traceVisible is available
+        if (currentlyVisible && props.showErrors) {
+          updateErrorDisplay(true);
+        }
+      });
+      return true;
+    });
   });
 }
 
 function updateErrorDisplay(visible: boolean) {
   if (graph.value) {
-    restyle(graph.value, { visible }, errorTraces);
+    errorTraces.forEach((traceIndex) => {
+      const trace = plot.value?.data[traceIndex];
+      if (!trace) return;
+      if (!graph.value) return;
+      // eslint-disable-next-line 
+      // @ts-ignore legend group should exist. but guard anyway
+      const group = trace.legendgroup as string;
+      const dataId = Object.keys(legendGroups).find(key => legendGroups[key] === group);
+      if (dataId && traceVisible.value.get(dataId)) {
+        restyle(graph.value, { visible }, [traceIndex]);
+      } 
+    });
   }
 }
 
@@ -197,6 +241,12 @@ watch(sampleKeyCounts, (newCounts: number[], oldCounts: number[]) => {
   console.log("Data changed, re-rendering plot");
   renderPlot();
 });
+
+watch(() => props.data, (newData, oldData) => {
+  console.log("Data prop changed, re-rendering plot");
+  renderPlot();
+});
+
 </script>
 
 <style scoped>
