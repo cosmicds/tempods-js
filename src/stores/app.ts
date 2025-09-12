@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { v4 } from "uuid";
 
-import type { MappingBackends, SelectionType, TimeRange, UnifiedRegion, UserDataset } from "@/types";
+import type { InitMapOptions, LatLngPair, MappingBackends, SelectionType, TimeRange, UnifiedRegion, UserDataset } from "@/types";
 import { ESRI_URLS, MoleculeType } from "@/esri/utils";
 import { TempoDataService } from "@/esri/services/TempoDataService";
 import { useUniqueTimeSelection } from "@/composables/useUniqueTimeSelection";
@@ -77,6 +77,7 @@ const createTempoStore = <T extends MappingBackends>(backend: MappingBackends) =
   const accentColor = ref("#068ede");
   const accentColor2 = ref("#ffcc33");
 
+
   function getTempoDataService(molecule: MoleculeType) {
     if (molecule in tempoDataServices) {
       return tempoDataServices[molecule];
@@ -139,6 +140,55 @@ const createTempoStore = <T extends MappingBackends>(backend: MappingBackends) =
       timeRanges.value[0] = val;
     }
   }, { immediate: true });
+
+  const zoomScale = 0.5; // for matplibre-gl
+  const urlParams = new URLSearchParams(window.location.search);
+  const initLat = parseFloat(urlParams.get("lat") || '40.044');
+  const initLon = parseFloat(urlParams.get("lon") || '-98.789');
+  const initZoom = parseFloat(urlParams.get("zoom") || `${4 * zoomScale}`); // 4 is the default zoom level for the map, multiplied by zoomScale for maplibre
+  const initTime = urlParams.get("t");
+  const initState = ref<InitMapOptions>({
+    loc: [initLat, initLon] as LatLngPair,
+    zoom: initZoom,
+    t: initTime ? +initTime : null
+  });
+  
+  const homeLat = 40.044;
+  const homeLon = -98.789;
+  const homeZoom = 4 * zoomScale; // 4 is the default zoom level for the map, multiplied by zoomScale for maplibre
+  const homeState = ref({
+    loc: [homeLat, homeLon] as LatLngPair,
+    zoom: homeZoom,
+    t: null as number | null
+  });
+
+  watch(timestampsLoaded, (loaded: boolean) => {
+    if (loaded) {
+      console.log('timestamps loaded');
+      if (initState.value.t) {
+        let index = uniqueDaysIndex(initState.value.t);
+        if (index == -1) {
+          return;
+        }
+        console.log('set the date');
+        singleDateSelected.value = uniqueDays.value[index];
+        index = nearestDateIndex(new Date(initState.value.t));
+        if (index == -1) {
+          return;
+        }
+        timeIndex.value = index;
+        // FIXME if needed. if we find the time is not being set, use nextTick
+        // this.$nextTick(() => { this.timeIndex = index;});
+      }
+    }
+  });
+
+  watch(timestamps, () => {
+    if (uniqueDays.value.length === 0) {
+      return;
+    }
+    singleDateSelected.value = uniqueDays.value[uniqueDays.value.length - 1];
+  });
 
   function addRegion(region: UnifiedRegionType) {
     // TODO: Fix the typing here
@@ -268,6 +318,9 @@ const createTempoStore = <T extends MappingBackends>(backend: MappingBackends) =
 
     selectionActive,
     lastFocusedRegion,
+
+    homeState,
+    initState,
 
     regions,
     regionsCreatedCount,
