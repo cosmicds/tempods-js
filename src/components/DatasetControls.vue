@@ -87,7 +87,7 @@
                   :key="index"
                   :title="region.name"
                   :style="{ 'background-color': region.color }"
-                  @click="() => lastFocusedRegion = region"
+                  @click="() => focusRegion = region"
                 >
                   <template #append>
                     <!-- New: Edit Geometry button (disabled if any selection using region has samples) -->
@@ -104,7 +104,10 @@
                       v-tooltip="'Edit Name'"
                       icon="mdi-pencil"
                       color="white"
-                      @click="() => editRegionName(region as UnifiedRegionType)"
+                      @click="(event: MouseEvent | KeyboardEvent) => {
+                        editRegionName(region as UnifiedRegionType);
+                        event.stopPropagation();
+                      }"
                     ></v-btn>
                     <v-btn
                       v-if="!store.regionHasDatasets(region as UnifiedRegionType)"
@@ -112,7 +115,10 @@
                       v-tooltip="'Delete'"
                       icon="mdi-delete"
                       color="white"
-                      @click="() => store.deleteRegion(region as UnifiedRegionType)"
+                      @click="(event: MouseEvent | KeyboardEvent) => {
+                        store.deleteRegion(region as UnifiedRegionType);
+                        event.stopPropagation();
+                      }"
                     ></v-btn>
                   </template>
                 </v-list-item>
@@ -489,7 +495,7 @@ const {
   selectedTimezone,
   uniqueDays,
   selectionActive,
-  lastFocusedRegion,
+  focusRegion,
 } = storeToRefs(store);
 
 function plotlyDragPredicate(element: HTMLElement): boolean {

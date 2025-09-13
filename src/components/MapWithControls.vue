@@ -261,7 +261,7 @@ const {
   currentTempoDataService,
   maxSampleCount,
   colorMap,
-  lastFocusedRegion,
+  focusRegion,
 } = storeToRefs(store);
 
 function createSelectionComputed(selection: SelectionType): WritableComputedRef<boolean> {
@@ -566,10 +566,13 @@ watch([showSamplingPreviewMarkers, regions, ()=> regions.value.length], (newVal)
   }
 });
 
-watch(lastFocusedRegion, region => {
+// TODO: This may need to be revisited when there are two maps
+watch(focusRegion, region => {
   if (region !== null) {
+    console.log(region);
     const bounds = regionBounds(region);
     fitBounds(map.value, bounds, true);
+    focusRegion.value = null;
   }
 });
 
