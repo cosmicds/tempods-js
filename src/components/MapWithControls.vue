@@ -365,14 +365,17 @@ const onMapReady = (m: Map) => {
     'states-custom', // state boundaries
   ];
   // idk what the background layer actually is
-  const ignoredLayers = ['background','aqi-layer-aqi-label'];
+  const ignoredLayers = ['background'];
   const shownLayers = [
     'esri-source',
-    'power-plants-layerheatmap',
-    'power-plants-layer',
-    'aqi-layer-aqi',
+    'power-plants-heatmap',
+    'aqi-layer-aqi'
   ];
-  map.value.addControl(new MaplibreLayersControl(ignoredLayers,ignoredSources, shownLayers), 'bottom-right');
+  const linkedLayers = {
+    'power-plants-heatmap': ['power-plants-layer'],
+    'aqi-layer-aqi': ['aqi-layer-aqi-label']
+  };
+  map.value.addControl(new MaplibreLayersControl(ignoredLayers,ignoredSources, shownLayers, linkedLayers), 'bottom-right');
   // pp.togglePowerPlants();
   updateRegionLayers(regions.value);
 };

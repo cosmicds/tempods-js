@@ -285,7 +285,7 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
     // Conditionally add text labels
     if (propertyToShow && showLabel) {
       map.addLayer({
-        id: labelLayerId!,
+        id: labelLayerId,
         type: 'symbol',
         source: sourceId,
         minzoom: labelMinZoom,
@@ -297,6 +297,7 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
         },
         paint: {
           'text-color': '#1a1a1a',
+          'text-opacity': 1, // needs to be set so we can detect if we change it
           'text-halo-color': '#ffffff',
           'text-halo-width': 1
         },

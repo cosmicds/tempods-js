@@ -12,14 +12,16 @@ import { createHeatmapColorMap, previewColormapInConsole } from "@/colormaps/uti
 
 export function addPowerPlants(map: Ref<Map | null> | null) {
   const powerPlantsLayerId = "power-plants-layer";
+  const powerPlantsHeatmapLayerId = "power-plants-heatmap";
   const powerPlantsSourceId = "power-plants-source";
   const powerPlantsVisible = ref(true);
   const loading = ref(false);
   let loadPromise: Promise<GeoJSON.FeatureCollection> | null = null;
+  let usingHeatmap = false;
 
   function togglePowerPlants(vis?: boolean | undefined) {
     if (!map || !map.value) return;
-    const layerIDs = [powerPlantsLayerId, powerPlantsLayerId+'heatmap'];
+    const layerIDs = [powerPlantsLayerId, powerPlantsHeatmapLayerId];
     layerIDs.forEach(id => {
       if (!map.value || !map.value!.getLayer(id)) return;
       
@@ -118,7 +120,7 @@ export function addPowerPlants(map: Ref<Map | null> | null) {
           /* other */ '#808080'
           
         ],
-        "circle-opacity": 0.8,
+        "circle-opacity": 1,
         "circle-stroke-width": 1,
         "circle-stroke-color": "#ffffff"
       },
@@ -183,21 +185,23 @@ export function addPowerPlants(map: Ref<Map | null> | null) {
     
     addSource();
     
+    // get screen pixel ratio
+    const pixelRatio = window.devicePixelRatio || 1;
     
     map.value.addLayer( {
-      id: powerPlantsLayerId+'heatmap',
+      id: powerPlantsHeatmapLayerId,
       type: 'heatmap',
       source: powerPlantsSourceId,
-      maxzoom: 7,
+      maxzoom: 5,
       paint: {
         "heatmap-radius": [
           'interpolate',
           ['linear'],
           ['zoom'],
           0, // zoom = 0
-          2, // radius = 1 @ zoom = 0
+          4 / pixelRatio, // radius = 1 @ zoom = 0
           9, // zoom = 9
-          20 // radius = 20 @ zoom = 9
+          40 / pixelRatio // radius = 20 @ zoom = 9
         ],
         "heatmap-intensity": 1,
         "heatmap-weight": [
@@ -235,14 +239,15 @@ export function addPowerPlants(map: Ref<Map | null> | null) {
           // ]
           ...createHeatmapColorMap('viridis', [0.1, 0.2, 0.4, 0.6, 0.8, 1], 0.05) // aweful by default
         ],
+        // only fade at the zoom limit
         "heatmap-opacity": [
           'interpolate',
           ['linear'],
           ['zoom'],
-          4.9, // zoom = 7
-          1, // opacity = 1 @ zoom = 7
-          5, // zoom = 9
-          0 // opacity = 0 @ zoom = 9
+          4.9, // zoom = 4.9
+          1, // opacity = 1 @ zoom = 4.9
+          5, // zoom = 5
+          0 // opacity = 0 @ zoom = 5
         ],
       }
 
@@ -250,11 +255,25 @@ export function addPowerPlants(map: Ref<Map | null> | null) {
     
     addLayer({minzoom: 5}); // add the point layer on top of the heatmap
     
+    usingHeatmap = true;
+    
+    map.value.on('idle', () => {
+      if (!isValidMap(map)) return;
+      if (usingHeatmap) {
+        if (map.value.getLayer(powerPlantsLayerId) && map.value.getLayer(powerPlantsHeatmapLayerId)) {
+          const heatmapVis = map.value.getLayoutProperty(powerPlantsHeatmapLayerId, 'visibility');
+          map.value.setLayoutProperty(powerPlantsLayerId, 'visibility', heatmapVis);
+          
+        }
+      }
+      
+    }); 
+    
   }
   
   function removeLayer() {
     if (!map || !map.value) return;
-    [powerPlantsLayerId, powerPlantsLayerId+'heatmap'].forEach(id => {
+    [powerPlantsLayerId, powerPlantsHeatmapLayerId].forEach(id => {
       if (!map || !map.value) return;
       
       if (map.value.getLayer(id)) {

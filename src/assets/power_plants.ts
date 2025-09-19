@@ -52,6 +52,21 @@ export enum PrimSource {
   Wind = "wind",
 }
 
+// custom groups for green and traditional sources
+export enum RenewableSource {
+  Biomass = "biomass",
+  Geothermal = "geothermal",
+  Hydroelectric = "hydroelectric",
+  Solar = "solar",
+  Wind = "wind",
+}
+
+export enum TraditionalSource {
+  Coal = "coal",
+  NaturalGas = "natural gas",
+  Petroleum = "petroleum",
+}
+
 export enum Source {
   EIA860EIA860MAndEIA923 = "EIA-860, EIA-860M and EIA-923",
 }
