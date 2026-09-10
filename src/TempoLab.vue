@@ -174,8 +174,6 @@ const localStoragePreferenceKey = "tempods-save";
 let _saveStateInterval: ReturnType<typeof setInterval>;
 
 const localStorageAutosave = window.localStorage?.getItem(localStoragePreferenceKey);
-const localStorageResponse = localStorageAutosave != null;
-console.log(localStorageAutosave, localStorageResponse);
 const useLocalStorage = ref(localStorageAutosave?.toLowerCase() !== "false");
 
 let animationFrame = 0;
@@ -290,10 +288,6 @@ onMounted(() => {
       onMove: onLeftMove,
       initialEventHandler: initialLeftHandler,
     });
-
-    if (!localStorageResponse) {
-      showAutosaveDialog.value = true;
-    }
 
   }
 
