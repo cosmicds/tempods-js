@@ -145,7 +145,7 @@ export enum SectorName {
 
 
 // import from the "Power_Plants_records.json"
-import powerPlantsData from './Power_Plants_records.json' assert { type: 'json' };
+import powerPlantsData from './Power_Plants_records.json' with { type: 'json' };
 
 // Cast the imported data to the PowerPlants array type
 export const powerPlants: PowerPlants[] = powerPlantsData as PowerPlants[];

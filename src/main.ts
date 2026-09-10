@@ -28,6 +28,7 @@ import PowerPlantsFilterControl from "./components/PowerPlantsFilterControl.vue"
 import IconCheckbox from "./components/IconCheckbox.vue";
 import SaveState from "./components/SaveState.vue";
 import SidePlaceholder from "./components/SidePlaceholder.vue";
+import IntroTourChoice from "./components/IntroTourChoice.vue";
 
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
@@ -45,6 +46,7 @@ import {
   faDroplet,
   faEarthAmericas,
   faAtom,
+  faSignsPost,
 } from "@fortawesome/free-solid-svg-icons";
 
 import { VueDatePicker } from "@vuepic/vue-datepicker";
@@ -53,6 +55,8 @@ import "./styles/vue3-date-picker-styles.css";
 import "./styles/molecule-svg.css";
 import "./styles/styles.css";
 import { UseClipboard } from "@vueuse/components";
+
+import "shepherd.js/dist/css/shepherd.css";
 
 import { createPinia } from "pinia";
 
@@ -69,6 +73,7 @@ library.add(faSolarPanel);
 library.add(faDroplet);
 library.add(faEarthAmericas);
 library.add(faAtom);
+library.add(faSignsPost);
 
 // TODO: This doesn't work. Why??
 // import "golden-layout/dist/css/goldenlayout-base.css";
@@ -132,6 +137,7 @@ createApp(TempoLab, {})
   .component('local-scope', LocalScope)
   .component('save-state', SaveState)
   .component('side-placeholder', SidePlaceholder)
+  .component('intro-tour-choice', IntroTourChoice)
 
   // Mount
   .mount("#app");

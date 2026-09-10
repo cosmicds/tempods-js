@@ -31,7 +31,7 @@ const generateHash = (string) => {
 
 const hashDataset = (data: PlotlyGraphDataSet) => {
   const hash = JSON.stringify(data.x) + JSON.stringify(data.y) + 
-  JSON.stringify(data.lower) + JSON.stringify(data.upper); // + JSON.stringify(data.errorType);
+  JSON.stringify(data.lower) + JSON.stringify(data.upper) + JSON.stringify(data.errorType);
   return generateHash(hash).toString();
 };
 

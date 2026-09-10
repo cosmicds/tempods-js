@@ -1,14 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// Copyright (c) 2016 Mapbox All rights reserved.
-// "Redistribution and use in source and binary forms, with or without modification, are permitted provided"
-// Full notice is contained below
-// This has been modified from the original to
-// 1) Update to use const/let as appropriate
-// 2) Add support for extraTags option to include additional tags (e.g., aqi) in properties
-export default (function () {
+/* eslint-disable prefer-const */
+/* eslint-disable no-var */
+export default (function() {
   'use strict';
-  
-  let extraTagsOption = ['aqi'];
+
   const excludeDirectChildren = new Set([
     'name','address','description','timespan','timestamp','extendeddata','visibility',
     'styleurl','linestyle','polystyle',
@@ -18,14 +12,12 @@ export default (function () {
   const removeSpace = /\s*/g,
     trimSpace = /^\s*|\s*$/g,
     splitSpace = /\s+/;
-  // generate a short, numeric hash of a string
+    // generate a short, numeric hash of a string
   function okhash(x) {
-    let h;
     if (!x || !x.length) return 0;
-    for (let i = 0; i < x.length; i++) {
+    for (var i = 0, h = 0; i < x.length; i++) {
       h = ((h << 5) - h) + x.charCodeAt(i) | 0;
-    } 
-    return h;
+    } return h;
   }
   // all Y children of X
   function get(x, y) { return x.getElementsByTagName(y); }
@@ -37,8 +29,7 @@ export default (function () {
   function norm(el) { if (el.normalize) { el.normalize(); } return el; }
   // cast array x into numbers
   function numarray(x) {
-    const o = [];
-    for (let j = 0; j < x.length; j++) { o[j] = parseFloat(x[j]); }
+    for (var j = 0, o = []; j < x.length; j++) { o[j] = parseFloat(x[j]); }
     return o;
   }
   // get the content of a text node, if any
@@ -48,8 +39,7 @@ export default (function () {
   }
   // get the contents of multiple text nodes, if present
   function getMulti(x, ys) {
-    const o = {};
-    let n, k;
+    let o = {}, n, k;
     for (k = 0; k < ys.length; k++) {
       n = get1(x, ys[k]);
       if (n) o[ys[k]] = nodeVal(n);
@@ -70,12 +60,12 @@ export default (function () {
     return o;
   }
   function coordPair(x) {
-    const ll = [attrf(x, 'lon'), attrf(x, 'lat')],
+    let ll = [attrf(x, 'lon'), attrf(x, 'lat')],
       ele = get1(x, 'ele'),
       // handle namespaced attribute in browser
       heartRate = get1(x, 'gpxtpx:hr') || get1(x, 'hr'),
-      time = get1(x, 'time');
-    let e;
+      time = get1(x, 'time'),
+      e;
     if (ele) {
       e = parseFloat(nodeVal(ele));
       if (!isNaN(e)) {
@@ -120,8 +110,7 @@ export default (function () {
   }
 
   const t = {
-    // Accept an optional options object, e.g., { styles: true, extraTags: ['aqi'] | 'auto' | true }
-    kml: function (doc, options = {}) {
+    kml: function(doc) {
 
       const gj = fc(),
         // styleindex keeps track of hashed styles in order to match features
@@ -154,40 +143,21 @@ export default (function () {
       
       
       for (let j = 0; j < placemarks.length; j++) {
-        gj.features = gj.features.concat(getPlacemark(placemarks[j]));
+        const feature = getPlacemark(placemarks[j]);
+        if (feature.length) gj.features.push(feature[0]);
       }
-
-      // Helper to collect extra tags into properties
-      // added from here
-      extraTagsOption = options.extraTags ?? ['aqi'];
-      
+      // collect all unhandled direct child elements of a Placemark into properties
       function addExtraTags(root, properties) {
-        // Array mode: pick selected tags
-        if (Array.isArray(extraTagsOption)) {
-          for (const tag of extraTagsOption) {
-            const el = get1(root, tag);
-            if (el) {
-              const key = tag; // keep as-is (e.g., 'aqi')
-              if (properties[key] === undefined) properties[key] = nodeVal(el);
-            }
-          }
-          return;
-        }
-        // Auto mode: include all unhandled direct child elements
-        if (extraTagsOption === 'auto' || extraTagsOption === true) {
-          for (let i = 0; i < root.childNodes.length; i++) {
-            const node = root.childNodes[i];
-            if (node.nodeType === 1) {
-              const local = node.localName ? node.localName.toLowerCase() : (node.nodeName || '').toLowerCase();
-              if (!excludeDirectChildren.has(local) && properties[local] === undefined) {
-                properties[local] = nodeVal(node);
-              }
+        for (let i = 0; i < root.childNodes.length; i++) {
+          const node = root.childNodes[i];
+          if (node.nodeType === 1) {
+            const local = node.localName ? node.localName.toLowerCase() : (node.nodeName || '').toLowerCase();
+            if (!excludeDirectChildren.has(local) && properties[local] === undefined) {
+              properties[local] = nodeVal(node);
             }
           }
         }
       }
-      // to here
-      
       function kmlColor(v) {
         let color, opacity;
         v = v || '';
@@ -196,15 +166,14 @@ export default (function () {
         if (v.length === 8) {
           opacity = parseInt(v.substr(0, 2), 16) / 255;
           color = '#' + v.substr(6, 2) +
-            v.substr(4, 2) +
-            v.substr(2, 2);
+                        v.substr(4, 2) +
+                        v.substr(2, 2);
         }
         return [color, isNaN(opacity) ? undefined : opacity];
       }
       function gxCoord(v) { return numarray(v.split(' ')); }
       function gxCoords(root) {
-        let elems = get(root, 'coord', 'gx');
-        const coords = [], times = [];
+        let elems = get(root, 'coord', 'gx'), coords = [], times = [];
         if (elems.length === 0) elems = get(root, 'gx:coord');
         for (let i = 0; i < elems.length; i++) coords.push(gxCoord(nodeVal(elems[i])));
         const timeElems = get(root, 'when');
@@ -215,8 +184,7 @@ export default (function () {
         };
       }
       function getGeometry(root) {
-        let geomNode, geomNodes, i, j, k;
-        const geoms = [], coordTimes = [];
+        let geomNode, geomNodes, i, j, k, geoms = [], coordTimes = [];
         if (get1(root, 'MultiGeometry')) { return getGeometry(get1(root, 'MultiGeometry')); }
         if (get1(root, 'MultiTrack')) { return getGeometry(get1(root, 'MultiTrack')); }
         if (get1(root, 'gx:MultiTrack')) { return getGeometry(get1(root, 'gx:MultiTrack')); }
@@ -226,38 +194,27 @@ export default (function () {
             for (j = 0; j < geomNodes.length; j++) {
               geomNode = geomNodes[j];
               if (geotypes[i] === 'Point') {
-                const coordsText = nodeVal(get1(geomNode, 'coordinates'));
-                if (coordsText && coordsText.trim().length) {
-                  geoms.push({
-                    type: 'Point',
-                    coordinates: coord1(coordsText)
-                  });
-                }
+                geoms.push({
+                  type: 'Point',
+                  coordinates: coord1(nodeVal(get1(geomNode, 'coordinates')))
+                });
               } else if (geotypes[i] === 'LineString') {
-                const coordsText = nodeVal(get1(geomNode, 'coordinates'));
-                if (coordsText && coordsText.trim().length) {
-                  geoms.push({
-                    type: 'LineString',
-                    coordinates: coord(coordsText)
-                  });
-                }
+                geoms.push({
+                  type: 'LineString',
+                  coordinates: coord(nodeVal(get1(geomNode, 'coordinates')))
+                });
               } else if (geotypes[i] === 'Polygon') {
                 const rings = get(geomNode, 'LinearRing'),
                   coords = [];
                 for (k = 0; k < rings.length; k++) {
-                  const ringCoordsText = nodeVal(get1(rings[k], 'coordinates'));
-                  if (ringCoordsText && ringCoordsText.trim().length) {
-                    coords.push(coord(ringCoordsText));
-                  }
+                  coords.push(coord(nodeVal(get1(rings[k], 'coordinates'))));
                 }
-                if (coords.length) {
-                  geoms.push({
-                    type: 'Polygon',
-                    coordinates: coords
-                  });
-                }
+                geoms.push({
+                  type: 'Polygon',
+                  coordinates: coords
+                });
               } else if (geotypes[i] === 'Track' ||
-                geotypes[i] === 'gx:Track') {
+                                geotypes[i] === 'gx:Track') {
                 const track = gxCoords(geomNode);
                 geoms.push({
                   type: 'LineString',
@@ -273,19 +230,17 @@ export default (function () {
           coordTimes: coordTimes
         };
       }
-      
-      
       function getPlacemark(root) {
-        let i, styleUrl = nodeVal(get1(root, 'styleUrl')),
-          lineStyle = get1(root, 'LineStyle'),
-          polyStyle = get1(root, 'PolyStyle');
-        const geomsAndTimes = getGeometry(root), properties = {},
+        let geomsAndTimes = getGeometry(root), i, properties = {},
           name = nodeVal(get1(root, 'name')),
           address = nodeVal(get1(root, 'address')),
+          styleUrl = nodeVal(get1(root, 'styleUrl')),
           description = nodeVal(get1(root, 'description')),
           timeSpan = get1(root, 'TimeSpan'),
           timeStamp = get1(root, 'TimeStamp'),
           extendedData = get1(root, 'ExtendedData'),
+          lineStyle = get1(root, 'LineStyle'),
+          polyStyle = get1(root, 'PolyStyle'),
           visibility = get1(root, 'visibility');
 
         if (!geomsAndTimes.geoms.length) return [];
@@ -351,7 +306,6 @@ export default (function () {
         
         // After known properties, add extra tags (e.g., aqi)
         addExtraTags(root, properties);
-
         if (extendedData) {
           const datas = get(extendedData, 'Data'),
             simpleDatas = get(extendedData, 'SimpleData');
@@ -383,13 +337,14 @@ export default (function () {
       }
       return gj;
     },
-    gpx: function (doc) {
-      let i, feature;
-      const tracks = get(doc, 'trk'),
+    gpx: function(doc) {
+      let i,
+        tracks = get(doc, 'trk'),
         routes = get(doc, 'rte'),
         waypoints = get(doc, 'wpt'),
         // a feature collection
-        gj = fc();
+        gj = fc(),
+        feature;
       for (i = 0; i < tracks.length; i++) {
         feature = getTrack(tracks[i]);
         if (feature) gj.features.push(feature);
@@ -413,10 +368,7 @@ export default (function () {
           times = [],
           heartRates = [],
           l = pts.length;
-        if (l < 2) {
-          console.error('toGeoJSON: a line must have at least two points');
-          return {};  // Invalid line in GeoJSON
-        }
+        if (l < 2) return {};  // Invalid line in GeoJSON
         for (let i = 0; i < l; i++) {
           const c = coordPair(pts[i]);
           line.push(c.coordinates);
@@ -433,11 +385,11 @@ export default (function () {
         };
       }
       function getTrack(node) {
-        let line;
-        const segments = get(node, 'trkseg'),
+        let segments = get(node, 'trkseg'),
           track = [],
           times = [],
-          heartRates = [];
+          heartRates = [],
+          line;
         for (let i = 0; i < segments.length; i++) {
           line = getPoints(segments[i], 'trkpt');
           if (line) {
@@ -518,7 +470,7 @@ export default (function () {
         const prop = getMulti(node, ['name', 'cmt', 'desc', 'type', 'time', 'keywords']),
           links = get(node, 'link');
         if (links.length) prop.links = [];
-        for (let i = 0, link; i < links.length; i++) {
+        for (var i = 0, link; i < links.length; i++) {
           link = { href: attr(links[i], 'href') };
           extend(link, getMulti(links[i], ['text', 'type']));
           prop.links.push(link);

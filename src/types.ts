@@ -26,6 +26,18 @@ export type LngLatPair = LocationOrderedPair<'(Lng,Lat)'>;
 export type MappingBackends = 'maplibre';
 
 
+export type LayerErrorType = 'ready' | 'loading' | 'error' | 'warning';
+
+export interface LayerStatus {
+  status: LayerErrorType;
+  statusMsg?: string[];
+}
+
+export interface LayerReadiness extends LayerStatus {
+  ready: boolean[];
+}
+
+
 export interface InitMapOptions {
   loc: LatLngPair,
   zoom: number,
@@ -165,7 +177,7 @@ export interface TimeRange {
   source?: TimeRange
 }
 
-export type MoleculeType = 'no2' | 'o3' | 'hcho';
+export type MoleculeType = 'no2' | 'o3' | 'o3trop' | 'hcho';
 
 export type TimeBinOptions = 'none' | 'hour' | 'day' | 'week' | 'month';
 export type FoldingPeriodOptions = 'none' | 'day' | 'week' | 'month' | 'year' | 'weekdayWeekend';

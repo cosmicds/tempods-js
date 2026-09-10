@@ -121,13 +121,13 @@ const toDateTime = (date: Date) => date.toLocaleString(undefined, {
 
 function formatValue(value: number | undefined | null): string {
   if (value === undefined || value === null) { return 'N/A'; }
-  if (props.dataset.molecule === 'o3') { return value.toFixed(2); }
+  if (props.dataset.molecule.startsWith('o3')) { return value.toFixed(2); }
   return (value / 1e14).toFixed(2);
 }
 
 function formatError(error: number | undefined | null): string {
   if (error === undefined || error === null) { return 'N/A'; }
-  if (props.dataset.molecule === 'o3') { return error.toFixed(2); }
+  if (props.dataset.molecule.startsWith('o3')) { return error.toFixed(2); }
   return (error / 1e14).toFixed(2);
 }
 
@@ -154,7 +154,7 @@ const sampleHeaders = [
   { 
     title: 'Column Density',
     children: [{
-      title:  props.dataset.molecule === 'o3' ? 'Dobson Units' : '10¹⁴ molecules/cm²',
+      title:  props.dataset.molecule.startsWith('o3') ? 'Dobson Units' : '10¹⁴ molecules/cm²',
       key: 'columnDensity',
       value: item => formatValue(item.value),
     }]
@@ -162,7 +162,7 @@ const sampleHeaders = [
   {
     title: 'Uncertainty*',
     children: [{
-      title:  props.dataset.molecule === 'o3' ? 'Dobson Units' : '10¹⁴ molecules/cm²',
+      title:  props.dataset.molecule.startsWith('o3') ? 'Dobson Units' : '10¹⁴ molecules/cm²',
       key: 'uncertainty',
       value: item => formatError(item.error),
     }]
@@ -205,7 +205,7 @@ const foldedHeaders = [
   { 
     title: 'Column Density',
     children: [{
-      title: props.dataset.molecule === 'o3' ? 'Dobson Units' : '10¹⁴ molecules/cm²',
+      title: props.dataset.molecule.startsWith('o3') ? 'Dobson Units' : '10¹⁴ molecules/cm²',
       key: 'columnDensity',
       value: item => formatValue(item.value)
     }]
@@ -213,7 +213,7 @@ const foldedHeaders = [
   {
     title: 'Uncertainty*',
     children: [{
-      title:  props.dataset.molecule === 'o3' ? 'Dobson Units' : '10¹⁴ molecules/cm²',
+      title:  props.dataset.molecule.startsWith('o3') ? 'Dobson Units' : '10¹⁴ molecules/cm²',
       key: 'uncertainty',
       value: item => formatError(item.error),
     }]

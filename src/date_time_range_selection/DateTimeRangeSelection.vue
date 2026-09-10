@@ -531,7 +531,9 @@ function asRangeOrList<T extends string>(arr: T[], order: T[]): string {
 const customTimeRangeName = computed((): string => {
   
   if (timeSelectionMode.value === 'single') {
-    return `${singleDateObj.value ? formatDateDisplayLong(singleDateObj.value) : 'No date selected'}`;
+    // the "tracked" option should track the currentDateRef (which is current with the currentDate prop)
+    const singleDate = timeSelectionRadio.value === 'tracked' ? currentDateRef.value : singleDateObj.value;
+    return `${singleDate ? formatDateDisplayLong(singleDate) : 'No date selected'}`;
   }
   console.error(timeSelectionMode.value);
     

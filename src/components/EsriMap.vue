@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, toRef, computed, type Ref, useTemplateRef, onMounted } from 'vue';
+import { ref, watch, toRef, computed, type Ref, useTemplateRef, onMounted, shallowRef } from 'vue';
 import type { PropType } from 'vue';
 import { storeToRefs } from "pinia";
 import type { Map } from 'maplibre-gl';
@@ -138,7 +138,7 @@ const emit = defineEmits<{
 
 // Reference to inner MaplibreMap exposed API
 const innerMap = useTemplateRef<InstanceType<typeof MaplibreMap> | null>("innerMap");
-const map = ref<Map | null>(null);
+const map = shallowRef<Map | null>(null);
 
 // Pass-through models for view state
 const latitude = defineModel<number>('latitude', { default: 0 });
@@ -182,6 +182,14 @@ watch(esriTimesteps, (newSteps, old) => {
 });
 
 watch(() => renderOptions.value.colormap, cmap => emit("colormap", cmap as AvailableColorMaps));
+
+
+watch(theEsriLayer.serviceReady, (ready) => {
+  const somewhatReady = ready.some(x => x);
+  if (!somewhatReady) {
+    theEsriLayer.setVisibility(false);
+  }
+});
 
 watch(map, (newMap, oldMap) => {
   if (oldMap) {

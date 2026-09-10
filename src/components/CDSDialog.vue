@@ -30,21 +30,21 @@
       :max-width="maxWidth"
       :height="height"
       :max-height="maxHeight"
-    >
-        <v-toolbar
-          density="compact"
-          :color="titleColor"
+    >   
+      <v-toolbar
+        density="compact"
+        :color="titleColor"
+      >
+        <v-toolbar-title class="cds-dialog-v-toolbar-title" :text="title"></v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-btn
+          class="cds-dialog-close-icon"
+          icon="mdi-close"
+          @click="close"
+          @keyup:enter="close"
         >
-          <v-toolbar-title class="cds-dialog-v-toolbar-title" :text="title"></v-toolbar-title>
-          <v-spacer></v-spacer>
-          <v-btn
-            class="cds-dialog-close-icon"
-            icon="mdi-close"
-            @click="close"
-            @keyup:enter="close"
-          >
-          </v-btn>
-        </v-toolbar>
+        </v-btn>
+      </v-toolbar>
       
       <v-card-text class="cds-dialog-v-card-text" >
         <slot>
@@ -145,6 +145,8 @@ watch(modelValue, value => {
 .cds-dialog-card {
   align-self: center;
   outline: 1px solid rgb(var(--v-theme-surface-variant)); 
+  /* overscroll-behavior does not have wide support */
+  overscroll-behavior-y: none; 
 
   .v-toolbar, .v-toolbar__content {
     height: 40px !important;
@@ -163,6 +165,7 @@ watch(modelValue, value => {
   contain: layout;
 }
 .cds-dialog-v-card-text {
+  overflow-y: scroll;
 
 }
 .v-toolbar-title.cds-dialog-v-toolbar-title > .v-spacer {

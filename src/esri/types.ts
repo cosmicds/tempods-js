@@ -20,6 +20,7 @@ export interface Attributes {
   NO2_Troposphere?: string;
   HCHO?: string;
   Ozone_Column_Amount?: string;
+  "0-2_km_Column_Ozone"?: string;
   StdTime: number;
   StdTime_Max: number;
   Variables: Variables;
@@ -28,7 +29,7 @@ export interface Attributes {
 
 export type Dimensions = "StdTime";
 
-export type Variables = "NO2_Troposphere" | "HCHO" | "Ozone_Column_Amount";
+export type Variables = "NO2_Troposphere" | "HCHO" | "Ozone_Column_Amount" | "0-2_km_Column_Ozone";
 
 
 export interface Location {

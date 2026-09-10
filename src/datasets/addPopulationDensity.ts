@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/naming-convention */
-import { useEsriImageServiceLayer } from "@/composables/useEsriMapLayer";
+import { useEsriImageServiceLayer } from "@/esri/maplibre/useEsriMapLayer";
 
 const count = "gpw_v4_population_count_adjusted_to_2015_unwpp_country_totals_rev11";
 const countVar = 'un-adjusted-population-count';

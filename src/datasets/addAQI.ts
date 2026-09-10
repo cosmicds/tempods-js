@@ -1,7 +1,10 @@
 import { ref, computed, type WritableComputedRef, type Ref, onBeforeUnmount } from 'vue';
 import M from 'maplibre-gl';
 import { Popup } from 'maplibre-gl';
-import { useKML } from './useKML';
+import type { CircleLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import { useKML } from '@/composables/useKML';
+import { useGeoJsonLayer } from '@/composables/useGeoJsonLayer';
+import { syncLayerOpacity } from "@/composables/useSyncedVisibilityAndOpacity";
 
 // AQI styleUrl -> color mapping (hex), derived from the
 // legend here https://gispub.epa.gov/airnow/?tab=archive
@@ -71,7 +74,7 @@ export interface UseKMLOptions {
 
 
 
-export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
+export function addAQI(url: string, options: UseKMLOptions = {}): AQILayer {
   const { geoJsonData, loading, error, setUrl: internalSetUrl, loadKML, cleanUp } = useKML(url);
 
   const propertyToShow = options.propertyToShow ?? null;
@@ -153,7 +156,75 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
     };
   };
 
+  // Reactive, post-processed GeoJSON. useGeoJsonLayer will react to it's changes
+  // but cannot use setData with this because computeds are not writable
+  const processedData = computed<GeoJSON.FeatureCollection | null>(() =>
+    geoJsonData.value ? postProcessGeoJson(geoJsonData.value) : null
+  );
+
+  // Main point layer (keeps the original id).
+  const circleLayer: Omit<CircleLayerSpecification, 'source'> = {
+    id: layerId,
+    type: 'circle',
+    layout: {
+      visibility: lastKnownVisible.value ? 'visible' : 'none'
+    },
+    paint: {
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        0, 1,
+        5, 8,
+        20, 12
+      ],
+      'circle-color': [
+        'case',
+        ['has', 'marker-color'],
+        ['get', 'marker-color'],
+        '#808080'
+      ],
+      'circle-stroke-color': '#969696ff',
+      'circle-stroke-width': 1,
+      'circle-opacity': 0.8
+    },
+    filter: ['==', '$type', 'Point']
+  };
+
+  const layers: (Omit<CircleLayerSpecification, 'source'> | Omit<SymbolLayerSpecification, 'source'>)[] = [circleLayer];
+
+  // Conditionally add text labels
+  if (propertyToShow && showLabel) {
+    layers.push({
+      id: labelLayerId,
+      type: 'symbol',
+      minzoom: labelMinZoom,
+      layout: {
+        'text-field': ['coalesce', ['to-string', ['get', propertyToShow]], ''],
+        'text-size': 10,
+        'text-offset': [0, 0],
+        'visibility': lastKnownVisible.value ? 'visible' : 'none'
+      },
+      paint: {
+        'text-color': '#1a1a1a',
+        'text-opacity': 1, // needs to be set so we can detect if we change it
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 1
+      },
+      filter: ['==', '$type', 'Point']
+    });
+  }
   
+  // create the geojson layer
+  const geoLayer = useGeoJsonLayer(
+    idBase || 'aqi',
+    processedData,
+    {
+      layerOptions: layers,
+      sourceSpec: { attribution: 'AirNow (U.S. EPA)' },
+      sourceId,            // preserve the original explicit source id
+      deepWatch: false,    // we replace the ref each reload, so shallow is fine
+    },
+  );
+
   function setupLayerPopup(propertyToShow: string, map: M.Map, layerId: string) {
     const popup = new Popup({ closeButton: false, closeOnClick: false, maxWidth: '200px' });
     const valueProp = propertyToShow || 'aqi';
@@ -197,6 +268,10 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
     onLeaveRef.value = onLeave;
   }
 
+  /**
+   * setupVisibilitySync is just making sure layerId and labelLayerId have the same visibility
+   * without connecting them externally using the `connections` on the LayerOrderControl
+   */
   function setupVisibilitySync(map: M.Map) {
     // Keep label visibility equal to main layer & sync external visibility changes
     const syncLabelVisibility = () => {
@@ -212,12 +287,17 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
           map.setLayoutProperty(labelLayerId, 'visibility', mainVis);
         }
       }
+
+      // load it if it is needed
+      if (isVisible && !geoJsonData.value && !loading.value) {
+        loadKML().catch(err => console.error('AQI: Error loading KML on visibility change:', err));
+      }
     };
     
     syncLabelVisibility();
     // idle takes a bit longer than styledata, and the user can tell
     // but idle would be less frequent i think
-    map.on('styledata', syncLabelVisibility); 
+    map.on('styledata', syncLabelVisibility);
     onStyleDataRef.value = syncLabelVisibility;
   }
 
@@ -226,84 +306,21 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
   const addToMap = async (map: M.Map): Promise<void> => {
     // Always store map first so subsequent retries have a reference
     mapRef.value = map;
-    
-    // Load KML if not already loaded
-    if (!geoJsonData.value) {
-      // console.log('AQI: No GeoJSON data, loading KML from URL:', kmlUrl.value);
+
+    // add to map immediately. the data will populate when the KML loads
+    geoLayer.addToMap(map);
+
+    // make sure to load most current visibility in case it changed since initialized
+    const vis = lastKnownVisible.value ? 'visible' : 'none';
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', vis);
+    if (map.getLayer(labelLayerId)) map.setLayoutProperty(labelLayerId, 'visibility', vis);
+
+    // only load if visible
+    if (lastKnownVisible.value && !geoJsonData.value) {
       await loadKML();
     }
-    if (!geoJsonData.value) {
-      throw new Error('No GeoJSON data available');
-    }
 
-    // Remove existing layer and source if they exist
-    if (map.getLayer(layerId)) {
-      map.removeLayer(layerId);
-    }
-    if (labelLayerId && map.getLayer(labelLayerId)) {
-      map.removeLayer(labelLayerId);
-    }
-    if (map.getSource(sourceId)) {
-      map.removeSource(sourceId);
-    }
-
-    // Add new source and layer
-    map.addSource(sourceId, {
-      type: 'geojson',
-      data: postProcessGeoJson(geoJsonData.value)
-    });
-
-    // Add point layer colored by 'marker-color'
-    map.addLayer({
-      id: layerId,
-      type: 'circle',
-      source: sourceId,
-      layout: {
-        visibility: lastKnownVisible.value ? 'visible' : 'none'
-      },
-      paint: {
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          0, 1,
-          5, 8,
-          20, 12
-        ],
-        'circle-color': [
-          'case',
-          ['has', 'marker-color'],
-          ['get', 'marker-color'],
-          '#808080'
-        ],
-        'circle-stroke-color': '#969696ff',
-        'circle-stroke-width': 1,
-        'circle-opacity': 0.8
-      },
-      filter: ['==', '$type', 'Point']
-    });
-
-    // Conditionally add text labels
     if (propertyToShow && showLabel) {
-      map.addLayer({
-        id: labelLayerId,
-        type: 'symbol',
-        source: sourceId,
-        minzoom: labelMinZoom,
-        layout: {
-          'text-field': ['coalesce', ['to-string', ['get', propertyToShow]], ''],
-          'text-size': 10,
-          'text-offset': [0, 0],
-          'visibility': lastKnownVisible.value ? 'visible' : 'none'
-        },
-        paint: {
-          'text-color': '#1a1a1a',
-          'text-opacity': 1, // needs to be set so we can detect if we change it
-          'text-halo-color': '#ffffff',
-          'text-halo-width': 1
-        },
-        filter: ['==', '$type', 'Point']
-      });
-
-      
       // Add popup/handlers if it hasn't been added yet
       if (showPopup && popupRef.value === null) {
         setupLayerPopup(propertyToShow, map, layerId);
@@ -314,7 +331,10 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
       setupVisibilitySync(map);
 
     }
-
+    
+    // keep the layer and it's label the same opacity
+    syncLayerOpacity(map, layerId, labelLayerId);
+    
     // Apply last known visibility after layers are added
     // const vis = lastKnownVisible.value ? 'visible' : 'none';
     // map.setLayoutProperty(layerId, 'visibility', vis);
@@ -339,14 +359,12 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
 
   // Change URL and refresh layer
   const setUrl = async (newUrl: string): Promise<void> => {
-    internalSetUrl(newUrl) // will automatically load new and abort prior
+    internalSetUrl(newUrl) // will automatically, clear old data, load new url, and abort currently running fetch if any
       .then(() => {
-        const map = mapRef.value;
-
-        if (map) {
-          addToMap(map as never);
-        }
-      }).catch((err) => {
+        // only load if visible. setupVisibilitySync will load it when needed
+        if (lastKnownVisible.value) loadKML();
+      })
+      .catch((err) => {
         console.error('AQI: Error setting new KML URL:', err);
       });
   };
@@ -363,18 +381,10 @@ export function addQUI(url: string, options: UseKMLOptions = {}): AQILayer {
     if (onLeaveRef.value) map.off('mouseleave', layerId, onLeaveRef.value);
     if (popupRef.value) popupRef.value.remove();
     if (onStyleDataRef.value) map.off('styledata', onStyleDataRef.value);
-    // if (onStyleDataRef.value) map.off('idle', onStyleDataRef.value); 
+    // if (onStyleDataRef.value) map.off('idle', onStyleDataRef.value);
 
-    // Remove layers and source
-    if (map.getLayer(labelLayerId)) {
-      map.removeLayer(labelLayerId);
-    }
-    if (map.getLayer(layerId)) {
-      map.removeLayer(layerId);
-    }
-    if (map.getSource(sourceId)) {
-      map.removeSource(sourceId);
-    }
+    // Remove layers and source (keeps the layer config)
+    geoLayer.cleanup();
 
     // Clear stored handlers/popup; keep mapRef so we can re-add later
     popupRef.value = null;

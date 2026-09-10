@@ -4,11 +4,15 @@
     multiple
     v-model="openPanels"
     :style="cssVars"
+    color="#555"
+    variant="accordion"
   >
     <div class="global-filters">
       <div>Power Plant Filters</div>
+      <span>
       <v-btn
         size="small"
+        :active="globalState === 'all'"
         @click="() => {
           openAllPanels();
           handleGlobalSelect(true);
@@ -16,41 +20,42 @@
       >All</v-btn>
       <v-btn
         size="small"
+        :active="globalState === 'none'"
         @click="() => {
           openAllPanels();
           handleGlobalSelect(false);
         }"
       >None</v-btn>
+      </span>
     </div>
     <v-expansion-panel
       v-for="(category, index) in PLANT_CATEGORIES"
       :key="index"
     >
-      <template #title>
-        <div class="expansion-panel-title">
+      <v-expansion-panel-title class="expansion-panel-title">
+          <div class="d-flex flex-wrap ga-2">
           <span>{{ category }}</span>
-          <span>
+          <span class="d-flex ga-2">
             <v-btn
               size="small"
-              @click="() => {
-                openPanel(index); 
+              :active="categoryState(category) === 'all'"
+              @click.stop="() => {
+                openPanel(index);
                 handleCategoryGlobalSelect(category, true);
               }"
-              @click.stop
             >All</v-btn>
             <v-btn
               size="small"
-              @click="() => {
-                openPanel(index); 
+              :active="categoryState(category) === 'none'"
+              @click.stop="() => {
+                openPanel(index);
                 handleCategoryGlobalSelect(category, false);
               }"
-              @click.stop
             >None</v-btn>
-          </span>
-        </div>
-      </template>
-      <template #text>
-        <div class="expansion-panel-text">
+            </span>
+          </div>
+      </v-expansion-panel-title>
+        <v-expansion-panel-text class="expansion-panel-text">
           <icon-checkbox
             v-for="source in SOURCES_BY_CATEGORY[category]"
             :key="source"
@@ -63,10 +68,10 @@
             v-model="selectedSources"
             density="compact"
             hide-details
+            hide-icon
           >
           </icon-checkbox>
-        </div>
-      </template>
+      </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
 </template>
@@ -81,7 +86,7 @@ import {
   TraditionalSources,
 } from "@/assets/power_plants";
 
-import { POWER_PLANT_COLORS } from "@/composables/addPowerPlants";
+import { POWER_PLANT_COLORS } from "@/datasets/addPowerPlants";
 
 import { setLayerVisibility } from "@/maplibre_controls";
 
@@ -129,6 +134,31 @@ const icons: Record<PrimSource, string> = {
   solar: "fa-solar-panel",
   wind: "mdi-wind-power",
 };
+
+type SelectState = "all" | "none" | "some";
+
+const globalState = computed<SelectState>(() => {
+  const count = selectedSources.value.length;
+  if (count === 0) { 
+    return "none"; 
+  }
+  if (count === Object.values(PrimSource).length) { 
+    return "all"; 
+  }
+  return "some";
+});
+
+function categoryState(category: PlantCategory): SelectState {
+  const sources = SOURCES_BY_CATEGORY[category];
+  const count = sources.filter(source => selectedSources.value.includes(source)).length;
+  if (count === 0) { 
+    return "none"; 
+  }
+  if (count === sources.length) { 
+    return "all"; 
+  }
+  return "some";
+}
 
 function openPanel(index: number) {
   if (!openPanels.value.includes(index)) {
@@ -244,26 +274,41 @@ function applyPrimSourceFilter(sources: PrimSource[]) {
 }
 </script>
 
-<style scoped lang="less">
+<style lang="less">
 #power-plant-filter-controls {
   border-radius: 5px;
   margin: 5px;
   width: unset;
-}
+
 
 .global-filters {
-  padding: 5px 0;
-}
-
-.expansion-panel-title {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
-  flex-direction: row;
-  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 5px;
+  border-radius: 5px;
+  text-transform: uppercase;
 }
 
-.expansion-panel-text {
+
+
+.v-expansion-panel-title.expansion-panel-title {
+  // display: flex;
+  // align-items: center;
+  // flex-direction: row;
+  // flex-wrap: wrap;
+  // gap: 5px;
+  padding: 8px 12px;
+}
+
+
+
+.v-expansion-panel-text.expansion-panel-text > .v-expansion-panel-text__wrapper {
   display: grid;
   grid-template-columns: repeat(var(--column-count), 1fr);
+}
+
 }
 </style>

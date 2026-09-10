@@ -22,7 +22,13 @@ export class ImageService {
 
     this._serviceMetadata = null;
 
-    if (this.options.getAttributionFromService) this.setAttributionFromService();
+    try {
+      if (this.options.getAttributionFromService) this.setAttributionFromService();
+    } catch (error) {
+      // this can fail if we have flakiness in the service
+      // but it is not a critical failure, so just catch & log
+      console.error(error);
+    }
   }
 
   get options () {
@@ -55,6 +61,7 @@ export class ImageService {
 
     // These are optional params
     if (this._time) params.append('time', this._time);
+    if (this.options.interpolation) params.append('interpolation', this.options.interpolation);
     if (this.options.mosaicRule) params.append('mosaicRule', JSON.stringify(this.options.mosaicRule));
     if (this.options.renderingRule) params.append('renderingRule', JSON.stringify(this.options.renderingRule));
 
@@ -107,25 +114,32 @@ export class ImageService {
   }
 
   setAttributionFromService () {
-    if (this._serviceMetadata) updateAttribution(this._serviceMetadata.copyrightText, this._sourceId, this._map);
-    else {
-      this.getMetadata()
-        .then(() => {
-          updateAttribution(this._serviceMetadata.copyrightText, this._sourceId, this._map);
+    // check for the copyright text. the service 
+    // may not actually have copyrightText as a key
+    if (this._serviceMetadata?.copyrightText) {
+      updateAttribution(this._serviceMetadata.copyrightText, this._sourceId, this._map);
+    } else {
+      this.getMetadata() // just get the fresh metadata from the promise instead of hoping it it synced internally
+        .then((metadata) => {
+          if (metadata?.copyrightText) {
+            updateAttribution(metadata.copyrightText, this._sourceId, this._map);
+          }
         });
     }
   }
-
+  
+  // update to better handle esri's error (it returns valid json, but not what you expect)
   getMetadata() {
     if (this._serviceMetadata !== null) return Promise.resolve(this._serviceMetadata);
-    return new Promise((resolve, reject) => {
-      getServiceDetails(this.esriServiceOptions.url, this.esriServiceOptions.fetchOptions)
-        .then((data) => {
-          this._serviceMetadata = data;
-          resolve(this._serviceMetadata);
-        })
-        .catch(err => reject(err));
-    });
+    // getServiceDetails is now a Promise, we can return it directly
+    return getServiceDetails(this.esriServiceOptions.url, this.esriServiceOptions.fetchOptions)
+      .then((data) => {
+        if (!data) {
+          throw new Error(`Service metadata was falsy: ${data}`);
+        }
+        this._serviceMetadata = data;
+        return this._serviceMetadata;
+      });
   }
 
   identify (lnglat, returnGeometry) {

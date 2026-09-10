@@ -2,7 +2,33 @@
   <v-app
     id="app"
     :style="cssVars"
-  >
+  > 
+    <v-snackbar
+      color="red"
+      absolute
+      eager
+      v-model="showAlert"
+      location="top"
+      :timeout="-1"
+      multi-line
+    > 
+      <div class="d-flex flex-row align-center ga-3">
+      <v-icon
+        color="white"
+        class="mr-2"
+      >mdi-alert</v-icon>
+      
+      <span v-html="globalWarning" />
+      </div>
+      <template v-slot:actions>
+        <v-btn
+          variant="tonal"
+          @click="showAlert = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
     <header-bar />
     <div ref="root" class="layout-root">
       <side-placeholder
@@ -25,6 +51,26 @@
           />
         </template>
       </side-placeholder>
+
+      <v-dialog
+        v-model="showPopup"
+        width="50%"
+      >
+        <intro-tour-choice
+          @close="() => {
+            showPopup = false;
+            if (!tourStartedFromPopup) {
+              store.showTourHint = true;
+            }
+            tourStartedFromPopup = false;
+          }"
+          @tour="() => {
+            tourStartedFromPopup = true;
+            getIntroTour(store).start();
+          }"
+          @dont-show="(value: boolean) => dontShowPopupAgain = value"
+        ></intro-tour-choice>
+      </v-dialog>
 
       <v-tooltip
         text="Change panel width"
@@ -127,10 +173,12 @@ import { computed, onBeforeMount, onMounted, ref, type Ref, useTemplateRef, watc
 import { storeToRefs } from "pinia";
 
 import { useTempoStore, updateStoreFromJSON, serializeTempoStore } from "@/stores/app";
+import { getIntroTour } from "@/utils/tours";
 
 const root = useTemplateRef<HTMLDivElement>("root");
 const leftHandle = useTemplateRef<HTMLDivElement>("left-handle");
 const rightHandle = useTemplateRef<HTMLDivElement>("right-handle");
+const tourStartedFromPopup = ref(false);
 // const layersPanel = useTemplateRef<HTMLElement>("layers-panel");
 // const datasetsPanel = useTemplateRef<HTMLElement>("datasets-panel");
 // const mapsPanel = useTemplateRef<HTMLElement>("maps-panel");
@@ -145,7 +193,19 @@ const {
   tempoRed,
   datasetControlsOpen,
   layerControlsOpen,
+  globalWarning,
 } = storeToRefs(store);
+
+const showAlert = ref(!!globalWarning.value);
+watch(globalWarning, (newVal) => {
+  showAlert.value = !!newVal;
+}); 
+watch(showAlert, (newVal) => {
+  if (!newVal) {
+    store.globalWarning = "";
+  }
+});
+
 
 const query = new URLSearchParams(window.location.search);
 debugMode.value = (query.get("debug") ?? process.env.VUE_APP_TEMPO_LAB_DEBUG)?.toLowerCase() == "true";
@@ -176,6 +236,9 @@ let _saveStateInterval: ReturnType<typeof setInterval>;
 const localStorageAutosave = window.localStorage?.getItem(localStoragePreferenceKey);
 const useLocalStorage = ref(localStorageAutosave?.toLowerCase() !== "false");
 
+const localStorageSkipPopup = "tempods-skip-intro-popup";
+const showPopup = ref(true);
+const dontShowPopupAgain = ref(false);
 let animationFrame = 0;
 
 function setBasis(panel: HTMLElement, sizePx: number) {
@@ -202,6 +265,10 @@ onBeforeMount(() => {
   if (storedState) {
     updateStoreFromJSON(store, storedState, true);
   }
+
+  const popupPreference = window.localStorage.getItem(localStorageSkipPopup);
+  dontShowPopupAgain.value = popupPreference === "true";
+  showPopup.value = !dontShowPopupAgain.value;
 });
 
 function updateSizes(layersDefault: boolean = false, datasetsDefault: boolean = false) {
@@ -355,6 +422,10 @@ function onLayersPanelOpenChange(open: boolean) {
   setHandleVisibility(leftHandle, open);
 }
 
+function onDontShowPopupAgainChange(dontShow: boolean) {
+  window.localStorage.setItem(localStorageSkipPopup, String(dontShow));
+}
+
 watch(datasetControlsOpen, onDatasetPanelOpenChange);
 watch(layerControlsOpen, onLayersPanelOpenChange);
 
@@ -368,6 +439,7 @@ function writeLocalStoragePreference(use: boolean) {
 }
 
 watch(useLocalStorage, writeLocalStoragePreference);
+watch(dontShowPopupAgain, onDontShowPopupAgainChange);
 </script>
 
 <style lang="less">
@@ -534,5 +606,174 @@ body {
   .v-card-actions .v-btn {
     padding: 0 4px;
   }
+}
+.progress-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+
+  .progress-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: width 0.15s ease, height 0.15s ease, background-color 0.15s ease;
+  }
+
+  .progress-dot:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .progress-dot:focus-visible {
+    outline: 1px solid var(--smithsonian-yellow);
+    outline-offset: 2px;
+  }
+
+  .progress-dot.active {
+    width: 12px;
+    height: 12px;
+    background-color: var(--smithsonian-yellow);
+  }
+
+  .progress-dot.active:hover {
+    background-color: var(--smithsonian-yellow);
+  }
+}
+
+body .shepherd-element {
+  background: #1a1a2e;
+  border: 1px solid var(--smithsonian-yellow);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: "Lexend", sans-serif;
+  max-width: 500px !important;
+}
+
+body .shepherd-element .shepherd-arrow::before {
+  background: #1a1a2e;
+}
+
+body .shepherd-element[data-popper-placement^="top"] .shepherd-arrow::before {
+  border-right: 1px solid var(--smithsonian-yellow);
+  border-bottom: 1px solid var(--smithsonian-yellow);
+}
+
+body .shepherd-element[data-popper-placement^="bottom"] .shepherd-arrow::before {
+  border-left: 1px solid var(--smithsonian-yellow);
+  border-top: 1px solid var(--smithsonian-yellow);
+  background: #1a1a2e !important;
+}
+
+body .shepherd-element[data-popper-placement^="left"] .shepherd-arrow::before {
+  border-top: 1px solid var(--smithsonian-yellow);
+  border-right: 1px solid var(--smithsonian-yellow);
+}
+
+body .shepherd-element[data-popper-placement^="right"] .shepherd-arrow::before {
+  border-bottom: 1px solid var(--smithsonian-yellow);
+  border-left: 1px solid var(--smithsonian-yellow);
+}
+
+.shepherd-element .shepherd-text {
+  color: #eaeaea;
+}
+
+body .shepherd-element .shepherd-text p {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+body .shepherd-has-title .shepherd-content .shepherd-header {
+  background: transparent;
+  padding-right: 2.5rem;
+  padding-bottom: 0rem !important;
+  padding-left: 12px;
+}
+
+.shepherd-element .shepherd-title {
+  color: var(--smithsonian-yellow);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.shepherd-element .shepherd-cancel-icon,
+body .shepherd-has-title .shepherd-content .shepherd-cancel-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.shepherd-element .shepherd-cancel-icon:hover,
+body .shepherd-has-title .shepherd-content .shepherd-cancel-icon:hover {
+  color: #ffffff;
+}
+
+body .shepherd-footer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+
+  .shepherd-button-back {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .progress-dots {
+    grid-column: 2;
+    justify-self: center;
+  }
+
+  .shepherd-button-next {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
+body .shepherd-button {
+  font-family: "Lexend", sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.0893em;
+  border-radius: 4px;
+  height: 28px;
+  min-width: 50px;
+  padding: 0 12px;
+  line-height: 28px;
+}
+
+.shepherd-button.shepherd-button-back {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #eaeaea;
+}
+
+.shepherd-button.shepherd-button-back:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.shepherd-button.shepherd-button-next {
+  background: var(--smithsonian-yellow);
+  border: 1px solid var(--smithsonian-yellow);
+  color: #1a1a2e;
+}
+
+.shepherd-button.shepherd-button-next:not(:disabled):hover {
+  filter: brightness(1.1);
+  background: var(--smithsonian-yellow);
+  color: #1a1a2e;
 }
 </style>

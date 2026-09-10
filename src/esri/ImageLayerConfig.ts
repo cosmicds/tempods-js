@@ -60,27 +60,32 @@ export function _convolutionRule(size: 3 | 5): RasterFunctionObject {
 export const stretches = {
   'NO2_Troposphere': [0, 15_000_000_000_000_000],
   'Ozone_Column_Amount': [250, 430], // +- 2 sigma
+  '0-2_km_Column_Ozone': [0, 15],
   'HCHO': [1_000_000_000_000_000, 30_000_000_000_000_000],
+  'lite': [1e14, 150 * 1e14],
 } as Record<Variables, [number, number]>;
 export const colorramps = {
   'NO2_Troposphere': 'Magma_r',
-  'Ozone_Column_Amount': 'Cividis_r', 
+  'Ozone_Column_Amount': 'Cividis',
+  '0-2_km_Column_Ozone': 'Cividis',
   'HCHO': 'Viridis_r',
+  'lite': 'svs_r',
 } as Record<Variables, ColorRamps>;
 
 export const rgbstretches = {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   'NO2_Troposphere': [0, 7_500_000_000_000_000],
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   'Ozone_Column_Amount': [250, 430], // +- 2 sigma
-  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '0-2_km_Column_Ozone': [0, 15],
   'HCHO': [1_000_000_000_000_000, 15_000_000_000_000_000],
+  'lite': [1e14, 150 * 1e14],
 } as Record<string, [number, number]>;
 export const rgbcolorramps = {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   'NO2_Troposphere': 'redfromwhite',
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'Ozone_Column_Amount': 'greenfromwhite', 
+  'Ozone_Column_Amount': 'greenfromwhite',
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  '0-2_km_Column_Ozone': 'greenfromwhite',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   'HCHO': 'bluefromwhite',
 } as Record<string, ColorRamps>;
@@ -92,6 +97,15 @@ export const colorbarOptions = {
     cbarScale: 1e14, 
     colormap: colorramps['NO2_Troposphere'], 
     rgbcolormap: rgbcolorramps['NO2_Troposphere'],
+    label:'NO<sub>2</sub>',
+    unit: "mol/cm<sup>2</sup>",
+  },
+  'lite': {
+    stretch: stretches['lite'], 
+    rgbstretch: stretches['lite'], 
+    cbarScale: 1e14, 
+    colormap: colorramps['lite'], 
+    rgbcolormap: colorramps['lite'],
     label:'NO<sub>2</sub>',
     unit: "mol/cm<sup>2</sup>",
   },
@@ -120,6 +134,15 @@ export const colorbarOptions = {
     colormap: colorramps['Ozone_Column_Amount'], 
     rgbcolormap: rgbcolorramps['Ozone_Column_Amount'],
     label: 'Ozone',
+    unit: "Dobson Units",
+  },
+  'o3trop': {
+    stretch: stretches['0-2_km_Column_Ozone'],
+    rgbstretch: rgbstretches['0-2_km_Column_Ozone'],
+    cbarScale: 1,
+    colormap: colorramps['0-2_km_Column_Ozone'],
+    rgbcolormap: rgbcolorramps['0-2_km_Column_Ozone'],
+    label: 'Tropospheric Ozone',
     unit: "Dobson Units",
   },
   'hcho': {
@@ -270,7 +293,7 @@ export interface EsriSliceResponse {
 }
 
 
-export type VariableNames = 'NO2_Troposphere' | 'Ozone_Column_Amount' | 'HCHO';
+export type VariableNames = 'NO2_Troposphere' | 'Ozone_Column_Amount' | '0-2_km_Column_Ozone' | 'HCHO';
 
 export async function fetchEsriTimeSteps(esriUrl: string, variableName: VariableNames, dimensionName = "StdTime"): Promise<EsriSliceResponse> {
   const url = esriUrl + '/slices';

@@ -17,18 +17,22 @@
           :synced-items="getConnectedItems(element)"
         >
           <template #warning
-            v-if="warningMessage(element)"
+            v-if="layerMessage(element)"
           >
-            <v-tooltip :text="warningMessage(element)!">
+            <v-tooltip :text="layerMessage(element)!">
               <template #activator="{ props }">
-                <v-icon v-bind="props" color="error">mdi-alert</v-icon>
+                <v-icon v-if="layerErrorType(element) === 'error'" v-bind="props" color="red">mdi-alert-octagon</v-icon>
+                <v-icon v-else v-bind="props" color="yellow">mdi-alert</v-icon>
               </template>
             </v-tooltip>
           </template>
           <template #info
             v-if="layerInfo[element]"
           >
-            <div v-html="layerInfo[element]"></div>
+            <h3 v-html="layerInfo[element].title"></h3>
+            <p v-html="layerInfo[element].description"></p>
+            <p v-if="layerInfo[element].timescale" class="mt-2">Timescale:<span v-html="layerInfo[element].timescale"></span></p>
+            <p class="mt-1 text-caption" v-html="layerInfo[element].source"></p>
           </template>
           <template #extras="{ visible }"
           >
@@ -55,9 +59,40 @@
                 </colorbar-horizontal>
               </template>
             </local-scope>
+            <colorbar-horizontal
+              v-else-if="element.includes('asthma')"
+              v-show="visible"
+              :cmap-name="asthmaColorbar.colormap"
+              :cmap="colormapFunction(asthmaColorbar.colormap)"
+              background-color="transparent"
+              height="15px"
+              font-size="9pt"
+              :nsteps="255"
+              :start-value="String(asthmaColorbar.min)"
+              :end-value="String(asthmaColorbar.max)"
+              :extend="true"
+            >
+              <template #label>{{ asthmaColorbar.label }}</template>
+            </colorbar-horizontal>
+
+            <!-- Loading bar -->
+             <v-progress-linear v-if="layerErrorType(element) === 'loading'" indeterminate />
+
+            <!-- Retry but only for hms-fire right now -->
+            <v-btn
+              v-if="layerErrorType(element) === 'error' && element === 'hms-fire'"
+              size="x-small"
+              variant="tonal"
+              color="red"
+              prepend-icon="mdi-refresh"
+              @click="store.doLayerAction(element, 'retry')"
+            >Try again</v-btn>
             <!-- Legend -->
 
-            <NarrowExpansionPanel v-show="visible" :item="element" v-if="hasLegend.includes(element)" :label="element==='power-plants-layer' ? 'Show Filter' : 'Show Legend'">
+            <NarrowExpansionPanel v-show="visible" :item="element" v-if="hasLegend.includes(element)">
+              <template #summary="{ isOpen }">
+                {{ element==='power-plants-layer' ? `${isOpen ? 'Hide' : 'Show'} Filter` : `${isOpen ? 'Hide' : 'Show'} Legend` }}
+              </template>
               <land-use-legend  v-if="element === 'land-use'"  />
               <AQILegend v-if="element === 'aqi-layer-aqi'" />
               <power-plants-filter-control :map="mapRef" v-if="element === 'power-plants-layer'"/>
@@ -73,7 +108,7 @@
 
 
 <script setup lang="ts">
-import { computed, type MaybeRef,  toValue, toRef } from 'vue';
+import { computed, type MaybeRef,  toValue, toRef, watch } from 'vue';
 import { storeToRefs } from "pinia";
 import draggable from 'vuedraggable';
 import M from 'maplibre-gl';
@@ -83,6 +118,9 @@ import { capitalizeWords } from "@/utils/names";
 import { colorbarOptions } from "@/esri/ImageLayerConfig";
 import { colormapFunction } from "@/colormaps/utils";
 import { useTempoStore } from "@/stores/app";
+import type { LayerErrorType } from "@/types";
+import { layerNames, layerInfo } from "@/datasets/layerData";
+import { asthmaColorbar } from "@/datasets/addAsthma";
 import NarrowExpansionPanel from './NarrowExpansionPanel.vue';
 import LandUseLegend from './LandUseLegend.vue';
 import AQILegend from './AQILegend.vue';
@@ -90,7 +128,7 @@ import PopDensLegend from './PopDensLegend.vue';
 
 
 const store = useTempoStore();
-const { showRGBMode, layersReady } = storeToRefs(store);
+const { showRGBMode, layersReady, globalWarning } = storeToRefs(store);
 
 interface Props {
   mapRef: M.Map | null;
@@ -110,14 +148,19 @@ const _emit = defineEmits<Emits>();
   
 const connections = {
   'stamen-toner-lines': ['coastline-custom', 'states-custom', 'stamen-toner-lines'],
+  'aqi-layer-aqi': ['aqi-layer-aqi','aqi-layer-aqi-label'], // colored dot on bottom, label on top
+  'places-asthma-tracts': ['places-asthma-tracts-outline'],
+  'places-asthma-counties': ['places-asthma-counties-outline'],
+  'hms-fire': ['hms-fire-circle', 'hms-fire-clustered']
 };
 const getConnectedItems = (layer: string): string[] => {
   return connections[layer] ?? [];
 };
 
-const { 
-  currentOrder, 
-  controller 
+
+const {
+  currentOrder,
+  controller
 } = useMaplibreLayerOrderControl(
   mapRef, 
   toValue(props.order),
@@ -130,86 +173,48 @@ const tempoPrefix = "tempo-";
 
 const displayOrder = computed({
   get(): string[] {
-    return currentOrder.value.slice().reverse();
+    const reversed = currentOrder.value.slice().reverse();
+    // Push not ready layers to the bottom, still in order though
+    const ready = reversed.filter(id => layerErrorType(id) !== 'error');
+    const notReady = reversed.filter(id => layerErrorType(id) === 'error');
+    return [...ready, ...notReady];
   },
   set(value: string[]) {
     controller?.setManagedOrder(value.slice().reverse());
   }
 });
 
-const layerNames: Record<string, string | undefined> = {
-  "tempo-no2": "TEMPO NO2",
-  "aqi-layer-aqi": "Air Quality Index",
-  "power-plants-heatmap": "Power Plants",
-  "power-plants-layer": "Power Plants",
-  "stamen-toner-lines": "Roads & Boundaries",
-  "stamen-toner-labels": "Place Labels",
-  "pop-dens": "Population Density",
-  "land-use": "Land Use",
-  "hms-fire": "Fire Detections",
-  'tempo-hcho': "TEMPO HCHO",
-  'tempo-o3': "TEMPO Ozone",
-};
-
-const layerInfo: Record<string, string | undefined> = {
-  "tempo-no2": `<h3>TEMPO Nitrogen Dioxide (NO<sub>2</sub>) Data Layer</h3>
-                <br/>
-                This data layer shows the amount of nitrogen dioxide (NO<sub>2</sub>) in the lower part of the Earth’s atmosphere, called the troposphere. This measurement represents the total number of nitrogen dioxide molecules in a column of air above one square centimeter on the Earth’s surface (molecules/cm2). NO<sub>2</sub> is an air pollutant that can affect both air quality and human health. It is produced by burning fossil fuels (ie. vehicles and power plants), fires, and even lightning.
-                <br/><br/>
-                TEMPO’s sensor captures this data at about 2 km by 4.75 km at the center of the field of regard (FOR). The data is processed into a Level 3 product with a resolution of 0.02 by 0.02 degrees, and the imagery you see is displayed at about 2 km resolution. To ensure accuracy, the layer is filtered, and only includes high-quality data points, based on key quality checks and sunlight conditions (solar zenith angle).`,
-  "tempo-hcho": `<h3>TEMPO Formaldehyde (HCHO) Data Layer</h3>
-                 <br/>
-                 This layer shows the total amount of formaldehyde in a vertical column of Earth’s atmosphere. The measurement represents the number of formaldehyde molecules in a column of air above each square centimeter of Earth’s surface. Formaldehyde is a Volatile Organic Compound (VOC), a major category of air pollutant that impacts human health and is a precursor to ozone. It is produced by natural sources (trees) as well as man-made sources, such as exhaust from cars, manufacturing plants, and oil and gas extraction.
-                 <br/><br/>
-                 TEMPO collects this information at about 2 km by 4.75 km near the center of its viewing area. The data is processed into a Level 3 product with a resolution of 0.02 by 0.02 degrees. The imagery you see is displayed at about 2 km resolution. To ensure accuracy, the layer only includes high-quality data points, filtered using key quality checks, sunlight conditions, and cloud coverage.`,
-  "tempo-o3": `<h3>TEMPO Ozone (O3) Data Layer</h3>
-               <br/>
-               This layer shows the total amount of ozone in a vertical column of Earth’s atmosphere, measured in Dobson Units (DU). In the upper atmosphere, ozone plays an important role in protecting life on Earth by absorbing harmful ultraviolet radiation, but in the troposphere ozone is an air pollutant that can affect plant, animal, and human health. Ozone in the troposphere is produced when NO<sub>2</sub> and volatile organic compounds, like HCHO interact in sunlight.
-               <br/><br/>
-               TEMPO collects ozone measurements at about 2 km by 4.75 km near the center of its viewing area. The data is processed into a Level 3 product with a resolution of 0.02 by 0.02 degrees, and the imagery you see is displayed at about 2 km resolution. To ensure accuracy, the layer only includes high-quality data points, filtered using sunlight conditions (solar zenith angles less than 80°).`,
-  "hms-fire": `This layer displays where potential fires have been identified using data from the NOAA Hazard Mapping System. Multiple satellites are used to detect these active fires. However, these sensors are sensitive to both heat sources and reflected sunlight. Industrial sources like steel mills and reflective surfaces like solar panels may create similar signals, but are typically filtered out during data processing. Fire detections can be impacted by environmental factors including cloud cover, dense smoke, and the terrain.
-                <br/><br/>
-                The colors represent the fire’s radiative power (FRP), which is a measure of the heat energy released by the fire, expressed in megawatts (MW). Higher FRP values often indicate more intense burning within a group of fire pixels, though these values can vary depending on imaging conditions. If FRP data isn’t available for a location, a placeholder value is used.
-                <br/><br/>
-                Source: NOAA Hazard Mapping System Fire And Smoke Product (<a href="https://www.ospo.noaa.gov/products/land/hms.html" target="_blank" rel="noopener noreferrer">link</a>)
-                <br/><br/>
-                Satellites: GOES/ABI, the JPSS/VIIRS and EOS/MODIS`,
-  "land-use": `This layer shows a global map of land use and land cover (LULC) created from high-resolution Sentinel-2 satellite imagery. The annual map is generated using Impact Observatory’s AI land classification model which was trained on billions of pixels each labeled by a person and provided by the National Geographic Society.
-                <br/><br/>
-                The land cover categories include: Water, Trees, Flooded Vegetation, Crops, Built Areas, Bare Ground, Snow/Ice, Clouds, and Rangeland.
-                <br/><br/>
-                Source: ESA Sentinel-2, model produced by ESRI and Impact Observatory (<a href="https://livingatlas.arcgis.com/landcoverexplorer/" target="_blank" rel="noopener noreferrer">link</a>)`,
-  "pop-dens": `This layer shows the estimates of human population density, indicated as the number of people per square kilometer, based on official national census and population data. The layer was created using data from ~13.5 million administrative units worldwide.
-                 <br/><br/>
-                 Source: Created by Center for International Earth Science Information Network - CIESIN - Columbia University. Published by NASA Socioeconomic Data and Applications Center (<a href="https://www.arcgis.com/home/item.html?id=a9fea1ecd1ba4f7db80a0f667fbc508b" target="_blank" rel="noopener noreferrer">link</a>)`,
-  "aqi-layer-aqi": `This layer shows the air quality index (AQI) using six color coded categories, each representing a range of values. Higher AQI values indicate higher levels of air pollution.  The AQI for each pollutant is based on health standards set for that pollutant and the scientific information that supports that standard. For ozone, the AQI is calculated on an 8-hour average while for particle pollution it uses a 24-hour average. The reported AQI is the highest AQI value for any of the five measured pollutants.
-                    <br/><br/>
-                    Source: Air Quality monitors in the U.S, Canada, and Mexico (<a href="https://gispub.epa.gov/airnow/index.html?tab=3&monitors=pm25&xmin=-22773986.638966657&xmax=-6121721.4048757255&ymin=-2287422.7865274334&ymax=10881759.942665514" target="_blank" rel="noopener noreferrer">link</a>) via the EPA`,
-  "power-plants-layer": `This layer shows all of the operable electric power plants in the United States with a maximum combined generating capacity of at least 30 megawatts (MW) or more (anywhere from ~400-800 homes a year). They are categorized by their energy source. The layer includes plants that are currently running, on standby, or are temporarily out of service.
-                         <br/><br/>
-                         The three major categories for generating electricity are fossil fuels, nuclear energy, and renewable energy sources.
-                         <br/><br/>
-                         Source: U.S. Energy Information Administration (EIA)</a>, provided by FEMA Geospatial Resource Center (<a href="https://gis-fema.hub.arcgis.com/datasets/b063316fac7345dba4bae96eaa813b2f/about" target="_blank" rel="noopener noreferrer">link</a>). Last accessed Oct. 16, 2025`,
-
-};
 
 const hasLegend = ['land-use', 'aqi-layer-aqi', 'power-plants-layer', 'pop-dens'];
-const serviceWarning = "The service supporting this layer is down, all or some data may be unavailable.";
 
 function displayNameTransform(layerId: string): string {
   return layerNames[layerId] ?? capitalizeWords(layerId.replace(/-/g, " "));
 }
 
-function warningMessage(layerId: string): string | null {
-  const readiness = layersReady.value.get(layerId);
-  if (!readiness || readiness.length === 0) {
-    return null;
-  }
-  if (readiness.every(ready => ready)) {
-    return null;
-  }
-  return serviceWarning;
+function layerErrorType(layerId: string): LayerErrorType {
+  return layersReady.value.get(layerId)?.status ?? 'ready';
 }
+
+function layerMessage(layerId: string): string | null {
+  const msgs = layersReady.value.get(layerId)?.statusMsg;
+  return msgs && msgs.length > 0 ? msgs.join(' ') : null;
+}
+
+watch(layersReady, () => {
+  const notReadyTempoLayers = Array.from(layersReady.value).map(([layerId, entry]) => {
+    if (layerId.startsWith('tempo') && entry.status === 'error') {
+      return true;
+    }
+    return false;
+  });
+  if (notReadyTempoLayers.some(e => e)) {
+    globalWarning.value = `The NASA Earthdata GIS service that this app relies on (at <a style="color:currentColor;" href="https://gis.earthdata.nasa.gov/" target="_blank">https://gis.earthdata.nasa.gov/</a>) is currently down. Certain TEMPO and Population Density data may not be available.<br/><br/>
+    An alternate version of TEMPO's NO<sub>2</sub> data layer is displayed here instead.`;
+  } else {
+    globalWarning.value = '';
+  }
+}, { deep: true });
+
 
 function cbarLabel(cbarScale: number, unit: string) {
   const power = cbarScale > 1 ? `10<sup>${Math.round(Math.log10(cbarScale))}</sup>` : "";

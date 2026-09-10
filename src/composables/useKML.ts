@@ -1,4 +1,4 @@
-import { ref, type Ref, onBeforeUnmount } from 'vue';
+import { ref, shallowRef, type Ref, onBeforeUnmount } from 'vue';
 import toGeoJSON from '../togeojson.js';
 import { useAbortableFetch } from './useAbortableFetch';
 
@@ -27,9 +27,15 @@ function parseXML(xmlString: string): Document | null {
 }
 
 export function useKML(url: string): KMLResource {
-  const { loading, error, abortController, abortableFetch, abort } = useAbortableFetch();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const {loading: fetchLoading, error, abortController, abortableFetch, abort } = useAbortableFetch();
   const kmlUrl = ref(url);
-  const geoJsonData = ref<GeoJSON.FeatureCollection | null>(null);
+  const geoJsonData = shallowRef<GeoJSON.FeatureCollection | null>(null);
+  const loadingUrl = ref<string | null>(null);
+  
+  // loading should track the fetch and KML -> GeoJSON conversion.
+  const loading = ref(false);
+  let mostRecentLoadIndex = 0;
 
   // Convert KML to GeoJSON
   const _convertKmlToGeoJson = (kmlContent: string): GeoJSON.FeatureCollection => {
@@ -51,13 +57,26 @@ export function useKML(url: string): KMLResource {
   async function loadKML() {
     
     const requestedUrl = kmlUrl.value;
+    console.log(`loading kml ${requestedUrl}`);
 
-    // Abort any in-flight request
+    // Already loading or already loaded this URL — don't restart.
+    // Checked without requiring an active controller so cached responses
+    // (which complete before the next styledata event) are also covered.
+    if (loadingUrl.value === requestedUrl) {
+      return;
+    }
+
+    // Abort any in-flight request for a different URL
     if (abortController.value) {
       abort('Aborting previous KML fetch due to new request');
     }
     
 
+    loadingUrl.value = requestedUrl;
+    loading.value = true;
+    mostRecentLoadIndex += 1;
+    const currentLoadIndex = mostRecentLoadIndex;
+    
     return abortableFetch(requestedUrl).then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -93,8 +112,15 @@ export function useKML(url: string): KMLResource {
         } else {
           console.error('Error fetching KML:', err);
         }
+      })
+      .finally(() => {
+        // only the most recent load owns the loading flag; a stale/aborted
+        // load finishing late must not clear it for a newer in-flight load
+        if (currentLoadIndex === mostRecentLoadIndex) {
+          loading.value = false;
+        }
       });
-    
+
   }
 
 
@@ -113,6 +139,7 @@ export function useKML(url: string): KMLResource {
     
     geoJsonData.value = null;
     error.value = null;
+    loadingUrl.value = null;
   }
 
   // Watch for URL changes to auto-reload (will be idempotent due to early return)

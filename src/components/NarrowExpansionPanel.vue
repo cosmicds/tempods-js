@@ -7,7 +7,7 @@
         height="1.5em"
         min-height="1.5em"
         >
-        <slot name="summary">{{ label ?? 'Show Legend' }}</slot>
+        <slot name="summary" :isOpen="isOpen">{{ label ?? 'Show Legend' }}</slot>
       </v-expansion-panel-title>
       <v-expansion-panel-text class="lcil-legend-content">
         <slot></slot>

@@ -1,5 +1,5 @@
-import { Ref, ref, onMounted, onUnmounted } from 'vue';
-import M, { Map, AttributionControl } from 'maplibre-gl';
+import { Ref, onMounted, onUnmounted, shallowRef } from 'vue';
+import M, { AttributionControl } from 'maplibre-gl';
 import { InitMapOptions, LatLngPair } from '@/types';
 
 
@@ -21,7 +21,7 @@ export function useMap(id="map", options: InitMapOptions, _showRoads: Ref<boolea
   // Something to know about MatLibre it likes longitude, latitude as opposed
   // to leaflet which uses latitude, longitude
   // this is where our map will be
-  const map = ref<M.Map | null>(null);
+  const map = shallowRef<M.Map | null>(null);
   
   async function addStates(map: M.Map) {
     fetch("states.geojson")
@@ -111,7 +111,7 @@ export function useMap(id="map", options: InitMapOptions, _showRoads: Ref<boolea
     // Need to use weird type assertion to avoid
     // Type instantiation is excessively deep and possibly infinite.ts(2589)
     // See discussion here https://github.com/mapbox/mapbox-gl-js/issues/13203#issuecomment-2634013147
-    const libreMap = map.value as unknown as M.Map;
+    const libreMap = map.value;
     
 
     // libreMap.setProjection({

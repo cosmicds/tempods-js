@@ -103,15 +103,12 @@ export class MaplibreLayerOrderControl extends PsuedoEvent {
     if (options.linkedLayers) {
       this._linked = options.linkedLayers.map(link => this._newLink(link));
     }
-    
-    const idleListener = () => {
-      this._orderLayers();
-      this._initialized = true;
-      this._watchForChanges();
-      this._map.off('idle', idleListener);
-    };
-    // wait for map to be ready
-    this._map.on('idle',idleListener);
+
+    // we can add lifecycle listeners immediately
+    // waiting for idle was causing it to miss early changes
+    this._watchForChanges();
+    this._orderLayers();
+    this._initialized = true;
     
   }
   
@@ -309,8 +306,11 @@ export class MaplibreLayerOrderControl extends PsuedoEvent {
   
   private _watchForChanges() {
     const onStyleData = () => this._maintainOrder();
+    const onIdle = () => this._maintainOrder();
     this._map.on('styledata', onStyleData);
+    this._map.on('idle', onIdle);
     this._eventHandlers.push(['styledata', onStyleData]);
+    this._eventHandlers.push(['idle', onIdle]);
   }
   
   /**
@@ -599,20 +599,29 @@ export function useMaplibreLayerOrderControl(
   let controller: MaplibreLayerOrderControl | null = null;
   let initialized = false;
   
+  function syncCurrentOrder() {
+    if (controller && !checkArrayEquality(currentOrder.value, controller.currentlyManagedLayerOrder ?? [])) {
+      currentOrder.value = controller?.currentlyManagedLayerOrder ?? [];
+    }
+  }
+  
   // Initialize the controller when the map is ready
-  function init(mapValue: M.Map | null) {
+  function init(mapValue: M.Map) {
     if (mapValue && !controller && !initialized) {
       controller = new MaplibreLayerOrderControl(mapValue, desiredOrder.value, {keepAtTop: moveToTop, linkedLayers: linkedLayers});
       controller.on('layer-order-changed', () => {
-        if (controller && !checkArrayEquality(currentOrder.value, controller.currentlyManagedLayerOrder ?? [])) {
-          currentOrder.value = controller?.currentlyManagedLayerOrder ?? [];
-        }
+        syncCurrentOrder();
       });
-      currentOrder.value = controller.currentlyManagedLayerOrder;
+      // currentOrder.value = controller.currentlyManagedLayerOrder;
+      syncCurrentOrder();
       initialized = true;
     }
   }
-  init(map.value);
+  
+  if (map.value) {
+    init(map.value);
+  }
+  
   watch(map, (newValue) => {
     if (newValue && !controller && !initialized) {
       console.log('Map changed, re-initializing controller', newValue);
@@ -637,6 +646,7 @@ export function useMaplibreLayerOrderControl(
   
   onBeforeUnmount(() => {
     controller?.destroy();
+    controller = null;
   });
   
   

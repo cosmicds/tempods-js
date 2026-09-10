@@ -14,6 +14,7 @@
         hide-details
         color="primary"
         :label="displayName ?? layerId"
+        :disabled="disabled"
       >
         <template #label>
           {{ displayName ?? layerId }}
@@ -73,6 +74,7 @@ interface Props {
   map: Map;
   displayName?: string;
   syncedItems?: string[];
+  disabled?: boolean;
 }
 
 const props = defineProps<Props>();

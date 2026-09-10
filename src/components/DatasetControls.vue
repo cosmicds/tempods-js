@@ -743,7 +743,7 @@ const moleculeReady = computed(() => {
   const ready = new Map<string, boolean[] | undefined>();
   MOLECULE_OPTIONS.forEach( v => {
     const layername = `tempo-${v.value}`;
-    ready.set(v.value,layersReady.value.get(layername));
+    ready.set(v.value,layersReady.value.get(layername)?.ready);
   });
   return ready;
 });

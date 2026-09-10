@@ -103,7 +103,7 @@
 
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { computed, ref, toRaw, useTemplateRef, watch, type Ref, type WritableComputedRef } from "vue";
+import { computed, ref, shallowRef, toRaw, useTemplateRef, watch, type Ref, type WritableComputedRef } from "vue";
 import { useDisplay } from 'vuetify';
 import { storeToRefs } from "pinia";
 import { MapBoxFeature, MapBoxFeatureCollection, MapBoxFeatureType, MapBoxForwardGeocodingOptions, geocodingInfoForSearch } from "@cosmicds/vue-toolkit";
@@ -111,8 +111,9 @@ import { Map, GeoJSONSource, type StyleLayer } from "maplibre-gl";
 import { getTimezoneOffset } from "date-fns-tz";
 import { v4 } from "uuid";
 
-import type { LatLngPair, PointSelectionInfo, RectangleSelectionInfo, SelectionType } from "@/types";
-import { type MoleculeType, MOLECULE_OPTIONS } from "@/esri/utils";
+import type { LatLngPair, LayerStatus, PointSelectionInfo, RectangleSelectionInfo, SelectionType } from "@/types";
+import { featureStatus } from "@/datasets/layerStatus";
+import { type MoleculeType, MOLECULE_OPTIONS, moleculeVariable } from "@/esri/utils";
 import { colorbarOptions } from "@/esri/ImageLayerConfig";
 import { useTempoStore } from "@/stores/app";
 import { useLocationMarker } from "@/composables/maplibre/useMarker";
@@ -132,7 +133,7 @@ import MaplibreDownloadButton from "@/components/MaplibreDownloadButton.vue";
 type MapType = Map | null;
 type MapTypeRef = Ref<MapType>;
 const maplibreMap = useTemplateRef<InstanceType<typeof EsriMap>>("maplibreMap");
-const map = ref<MapType>(null);
+const map = shallowRef<MapType>(null);
 
 type Timeout = ReturnType<typeof setTimeout>;
 
@@ -193,11 +194,11 @@ type UnifiedRegionType = typeof regions.value[number];
 
 const display = useDisplay();
 
-import { addPowerPlants } from "@/composables/addPowerPlants";
-import { addHMSFire } from "@/composables/addHMSFire";
+import { addPowerPlants } from "@/datasets/addPowerPlants";
+import { addHMSFire } from "@/datasets/addHMSFire";
 
 const pp = addPowerPlants(map as Ref<Map | null> | null, false);
-import { addQUI } from '@/composables/addAQI';
+import { addAQI } from '@/datasets/addAQI';
 
 // base it of singleDateSelected
 const airQualityUrl = computed(() => {
@@ -211,7 +212,7 @@ const airQualityUrl = computed(() => {
   const day = date.getUTCDate().toString().padStart(2, '0');
   return `https://s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/${year}/${year}${month}${day}/KMLPointMaps_PM2.5-24hr.kml`;
 });
-const aqiLayer = addQUI(airQualityUrl.value, { 
+const aqiLayer = addAQI(airQualityUrl.value, { 
   propertyToShow: 'aqi', 
   labelMinZoom: 5, 
   layerName: 'aqi', 
@@ -226,18 +227,39 @@ watch(airQualityUrl, (newUrl) => {
 });
 
 
-import { addPopulationDensityLayer } from '@/composables/addPopulationDensity';
+import { addPopulationDensityLayer } from '@/datasets/addPopulationDensity';
 const popLayer = addPopulationDensityLayer();
 
-import { addLandUseLayer } from "@/composables/addLandUse";
+import { addLandUseLayer } from "@/datasets/addLandUse";
 const sentinalLandUseLayer = addLandUseLayer();
+
+import { addAsthmaLayer } from "@/datasets/addAsthma";
+const asthmaCounties = addAsthmaLayer('places-asthma-counties', 2);
+// asthma tracts disabled
+// const asthmaTracts = addAsthmaLayer('places-asthma-tracts', 3);
+
+function syncAsthmaStatus(layer: ReturnType<typeof addAsthmaLayer>) {
+  watch(() => layer.status.value, (s) => {
+    store.setLayerReady(layer.layerId, [s !== 'zoom-in'], featureStatus(s));
+  }, { immediate: true });
+}
+syncAsthmaStatus(asthmaCounties);
+// syncAsthmaStatus(asthmaTracts);
 
 const hmsFire = addHMSFire(singleDateSelected, {
   layerName: 'hms-fire',
   visible: false,
   showPopup: true,
   showLabel: false,
+  showClusters: true,
 });
+
+// for now we only handle the hms-fire actions
+watch(() => store.layerAction, (action) => {
+  if (action?.layerId === 'hms-fire' && action.action === 'retry') {
+    hmsFire.retry();
+  }
+}, { deep: true });
 
 import { type UseEsriTempoLayer, useTempoLayer } from "@/esri/maplibre/useTempoImageLayer";
 // just use the hcho layer for now
@@ -259,64 +281,97 @@ const ozoneLayer = useTempoLayer({
   initVisible: false,
   initRGB: showRGBMode.value,
 });
+const o3tropLayer = useTempoLayer({
+  initialMolecule: "o3trop",
+  timestamp,
+  opacity: 1,
+  fetchOnMount: true,
+  layerName: "tempo-o3trop",
+  initVisible: false,
+  initRGB: showRGBMode.value,
+});
 const no2Layer = ref<UseEsriTempoLayer | null>(null);
+  
+import { useTempoLiteImages } from "@/composables/tempo-lite/TempoLite";
+const tempoLite = useTempoLiteImages();
 
-function syncLayerReady(layerName: string, serviceReady: boolean[] | undefined) {
+function syncLayerReady(layerName: string, serviceReady: boolean[] | undefined, status?: LayerStatus) {
   if (!serviceReady || serviceReady.length === 0) {
     store.clearLayerReady(layerName);
     return;
   }
-  store.setLayerReady(layerName, serviceReady);
+  store.setLayerReady(layerName, serviceReady, status);
 }
 
 function addAdvancedLayers(m: Map | null) {
   if (m === null) {
-    throw new Error('Tried to addAdvancedLayers but map was null');
-  }
-  // pp.addheatmapLayer();
-  // pp.togglePowerPlants(false);
-  aqiLayer.addToMap(m);
-  popLayer.addEsriSource(m);
-  sentinalLandUseLayer.addEsriSource(m);
-  hmsFire.addToMap(m);
-  hchoLayer.addEsriSource(m);
-  ozoneLayer.addEsriSource(m);
-  syncLayerReady('tempo-hcho', hchoLayer.serviceReady.value);
-  syncLayerReady('tempo-o3', ozoneLayer.serviceReady.value);
-  syncLayerReady('pop-dens', popLayer.serviceReady.value);
-  syncLayerReady('land-use', sentinalLandUseLayer.serviceReady.value);
-  // Only move if target layer exists (avoid errors if initial KML load failed)
-  try {
-    if (m.getLayer('kml-layer-aqi')) {
-      m.moveLayer('states-custom','kml-layer-aqi');
-    }
-  } catch {
-    // ignore
+    console.warn('Tried to addAdvancedLayers but map was null');
+    return;
   }
   
-  pp.addLayer();
+  // let each of these fail without preventing the rest of the layers from loading
+  const tryCatch = (label: string, cb: () => void) => {
+    // tryCatch util
+    try {
+      cb();
+    } catch (error) {
+      console.error(`[${label}] Failed to add layer`, error);
+    }
+  };
+  // pp.addheatmapLayer();
   // pp.togglePowerPlants(false);
+  tryCatch('aqi-layer-aqi', () => aqiLayer.addToMap(m));
+  tryCatch('pop-dens', () => popLayer.addEsriSource(m));
+  tryCatch('land-use', () => sentinalLandUseLayer.addEsriSource(m));
+  tryCatch('hms-fire', () => hmsFire.addToMap(m));
+  tryCatch('tempo-hcho', () => hchoLayer.addEsriSource(m));
+  tryCatch('tempo-o3', () => ozoneLayer.addEsriSource(m));
+  tryCatch('tempo-o3trop', () => o3tropLayer.addEsriSource(m));
+  syncLayerReady('tempo-hcho', hchoLayer.serviceReady.value, hchoLayer.status.value);
+  syncLayerReady('tempo-o3', ozoneLayer.serviceReady.value, ozoneLayer.status.value);
+  syncLayerReady('tempo-o3trop', o3tropLayer.serviceReady.value, o3tropLayer.status.value);
+  syncLayerReady('pop-dens', popLayer.serviceReady.value, popLayer.status.value);
+  syncLayerReady('land-use', sentinalLandUseLayer.serviceReady.value, sentinalLandUseLayer.status.value);
+  syncLayerReady('hms-fire', [hmsFire.loading.value], hmsFire.status.value);
+  
+  tryCatch('power-plants-layer', () => pp.addLayer());
+  // pp.togglePowerPlants(false);
+  tryCatch(asthmaCounties.layerId, () => asthmaCounties.addToMap(m));
+  // asthma tracts disabled
+  // tryCatch(asthmaTracts.layerId, () => asthmaTracts.addToMap(m));
 }
 
 function removeAdvancedLayers(m: Map | null) {
   if (m === null) {
-    throw new Error('Tried to removeAdvancedLayers but map was null');
+    console.warn('Tried to removeAdvancedLayers but map was null');
+    return;
   }
+  // tempoLite.removeFromMap();
   aqiLayer.removeFromMap(m);
   popLayer.removeEsriSource();
   sentinalLandUseLayer.removeEsriSource();
   hmsFire.removeFromMap(m);
   hchoLayer.removeEsriSource();
   ozoneLayer.removeEsriSource();
+  o3tropLayer.removeEsriSource();
   pp.removeLayer();
+  asthmaCounties.removeFromMap(m);
+  // asthma tracts disabled
+  // asthmaTracts.removeFromMap(m);
   store.clearLayerReady('tempo-hcho');
   store.clearLayerReady('tempo-o3');
+  store.clearLayerReady('tempo-o3trop');
   store.clearLayerReady('pop-dens');
   store.clearLayerReady('land-use');
+  store.clearLayerReady('places-asthma-counties');
+  // store.clearLayerReady('places-asthma-tracts');
 }
 
 const onMapReady = (m: Map) => {
   map.value = m; // ESRI source already added by EsriMap
+  syncLayerReady('tempo-no2', no2Layer.value?.serviceReady, no2Layer.value?.status); // needs to be done early
+  tempoLite.addTo(m);
+  tempoLite.setVisibility(false);
   if (showAdvancedLayers.value) addAdvancedLayers(m);
   updateRegionLayers(regions.value);
   m.resize();
@@ -324,10 +379,10 @@ const onMapReady = (m: Map) => {
 
 watch(showAdvancedLayers, (value) => {
   if (value) {
-    addAdvancedLayers(map.value as Map | null);
+    addAdvancedLayers(map.value);
     return;
   }
-  removeAdvancedLayers(map.value as Map | null);
+  removeAdvancedLayers(map.value);
   
   
 });
@@ -336,6 +391,7 @@ watch(molecule, (newMolecule) => {
   if (map.value) {
     hchoLayer.setVisibility(newMolecule === 'hcho');
     ozoneLayer.setVisibility(newMolecule === 'o3');
+    o3tropLayer.setVisibility(newMolecule === 'o3trop');
     no2Layer.value?.setVisibility(newMolecule === 'no2');
     // map.value.moveLayer(`tempo-${newMolecule}`, 'tempo-no2');
   }
@@ -343,27 +399,55 @@ watch(molecule, (newMolecule) => {
 
 const activeLayer = computed(() => `tempo-${molecule.value}`);
 
+
+
+// check if a service failed (empty arrays are still checking)
+function serviceFailed(readyArray: boolean[] | undefined): boolean {
+  return Array.isArray(readyArray) && readyArray.length > 0 && !readyArray.some(x => x);
+}
+
 watch(() => [
   no2Layer.value?.serviceReady,
   hchoLayer.serviceReady.value,
   ozoneLayer.serviceReady.value,
+  o3tropLayer.serviceReady.value,
   popLayer.serviceReady.value,
   sentinalLandUseLayer.serviceReady.value,
-], ([no2Ready, hchoReady, ozoneReady, popReady, landUseReady]) => {
-  syncLayerReady('tempo-no2', no2Ready);
+  [hmsFire.loading.value],
+], ([no2Ready, hchoReady, ozoneReady, o3tropReady, popReady, landUseReady]) => {
+  syncLayerReady('tempo-no2', no2Ready, no2Layer.value?.status);
+
+
+  // Only take over with tempo-lite once the no2 service has actually failed
+  if (serviceFailed(no2Ready)) {
+    tempoLite.setVisibility(true);
+    tempoLite.forceLiteTimestamps();
+    no2Layer.value?.setVisibility(false);
+  }
+
+  const no2Working = Array.isArray(no2Ready) && no2Ready.some(x => x);
+  if (no2Working) {
+    tempoLite.removeFromMap();
+  }
+
+
 
   if (showAdvancedLayers.value) {
-    syncLayerReady('tempo-hcho', hchoReady);
-    syncLayerReady('tempo-o3', ozoneReady);
-    syncLayerReady('pop-dens', popReady);
-    syncLayerReady('land-use', landUseReady);
+    syncLayerReady('tempo-hcho', hchoReady, hchoLayer.status.value);
+    syncLayerReady('tempo-o3', ozoneReady, ozoneLayer.status.value);
+    syncLayerReady('tempo-o3trop', o3tropReady, o3tropLayer.status.value);
+    syncLayerReady('pop-dens', popReady, popLayer.status.value);
+    syncLayerReady('land-use', landUseReady, sentinalLandUseLayer.status.value);
+    syncLayerReady('hms-fire', [hmsFire.loading.value], hmsFire.status.value);
     return;
   }
 
   store.clearLayerReady('tempo-hcho');
   store.clearLayerReady('tempo-o3');
+  store.clearLayerReady('tempo-o3trop');
   store.clearLayerReady('pop-dens');
   store.clearLayerReady('land-use');
+  store.clearLayerReady('hms-fire');
 }, { deep: true, immediate: true });
 
 import { stretches, colorramps, rgbstretches, rgbcolorramps, type ColorRamps } from "@/esri/ImageLayerConfig";
@@ -373,6 +457,7 @@ watch(showRGBMode, (cMode) => {
   const colormapsToUse = cMode ? rgbcolorramps : colorramps;
   hchoLayer.renderOptions.value.colormap = colormapsToUse['HCHO'];
   ozoneLayer.renderOptions.value.colormap = colormapsToUse['Ozone_Column_Amount'];
+  o3tropLayer.renderOptions.value.colormap = colormapsToUse['0-2_km_Column_Ozone'];
   if (no2Layer.value) {
     no2Layer.value.renderOptions.colormap = colormapsToUse['NO2_Troposphere'];
   }
@@ -380,6 +465,7 @@ watch(showRGBMode, (cMode) => {
   const stretchesToUse = cMode ? rgbstretches : stretches;
   hchoLayer.renderOptions.value.range = stretchesToUse['HCHO'];
   ozoneLayer.renderOptions.value.range = stretchesToUse['Ozone_Column_Amount'];
+  o3tropLayer.renderOptions.value.range = stretchesToUse['0-2_km_Column_Ozone'];
   if (no2Layer.value) {
     no2Layer.value.renderOptions.range = stretchesToUse['NO2_Troposphere'];
   }
@@ -412,17 +498,13 @@ const regionLayers: Record<string, GeoJSONSource> = {};
 
 // const colorMap = computed(() => colorbarOptions[molecule.value].colormap.toLowerCase());
 const colorMap = computed(() => {
-  const mol = molecule.value == 'no2' 
-    ? 'NO2_Troposphere' : molecule.value == 'hcho' 
-      ? 'HCHO' : 'Ozone_Column_Amount';
+  const mol = moleculeVariable(molecule.value);
   return showRGBMode.value ? rgbcolorramps[mol].toLowerCase() : colorramps[mol].toLowerCase();
 });
 
 type ColorbarOptionsKey = keyof typeof colorbarOptions;
 const currentColorbarOptions = computed<typeof colorbarOptions[ColorbarOptionsKey]>(() => {
-  const mol = molecule.value == 'no2' 
-    ? 'NO2_Troposphere' : molecule.value == 'hcho' 
-      ? 'HCHO' : 'Ozone_Column_Amount';
+  const mol = moleculeVariable(molecule.value);
   return {
     ...colorbarOptions[molecule.value],
     colormap: showRGBMode.value ? rgbcolorramps[mol] : colorramps[mol],
@@ -564,8 +646,8 @@ function addLayer(
 ): { layer: GeoJSONSource } {
   const isRect = geometryType === 'rectangle';
   const layerInfo = isRect ?
-    addRectangleLayer((map.value as MapType)!, info as RectangleSelectionInfo, color, regionOpacity.value, regionVisibility.value) :
-    addPointLayer((map.value as MapType)!, info as PointSelectionInfo, color, regionVisibility.value);
+    addRectangleLayer((map.value)!, info as RectangleSelectionInfo, color, regionOpacity.value, regionVisibility.value) :
+    addPointLayer((map.value)!, info as PointSelectionInfo, color, regionVisibility.value);
   map.value?.moveLayer(layerInfo.layer.id);
   return layerInfo;
 }
@@ -576,9 +658,9 @@ function removeLayer(
 ) {
   const isRect = geometryType === 'rectangle';
   if (isRect) {
-    removeRectangleLayer((map.value as MapType)!, layer);
+    removeRectangleLayer((map.value)!, layer);
   } else {
-    removePointLayer((map.value as MapType)!, layer);
+    removePointLayer((map.value)!, layer);
   }
 }
 
@@ -630,18 +712,18 @@ watch(regions, updateRegionLayers, { deep: true });
 watch(regionOpacity, (opacity: number) => {
   if (map.value !== null) {
     Object.values(regionLayers).forEach(layer => {
-      setLayerOpacity(map.value as Map, layer.id, opacity);
+      setLayerOpacity(map.value!, layer.id, opacity);
     });
-    setLayerOpacity(map.value as Map, "predicted-samples-locations-layer", opacity);
+    setLayerOpacity(map.value, "predicted-samples-locations-layer", opacity);
   }
 });
 
 watch(regionVisibility, (visible: boolean) => {
   if (map.value !== null) {
     Object.values(regionLayers).forEach(layer => {
-      setLayerVisibility(map.value as Map, layer.id, visible);
+      setLayerVisibility(map.value!, layer.id, visible);
     });
-    setLayerVisibility(map.value as Map, "predicted-samples-locations-layer", visible);
+    setLayerVisibility(map.value, "predicted-samples-locations-layer", visible);
   }
 });
 

@@ -116,6 +116,7 @@ hr {
 
 .content-container {
   margin-top: 10px;
+  height: 100%;
 }
 
 .placeholder-content {

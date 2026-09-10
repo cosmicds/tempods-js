@@ -232,9 +232,9 @@ export function createCODAPMeta(dataset: Prettify<UserDataset>): string[] {
   meta.push('# source: TEMPO-Lab Data Export');  
   
   // Attributes common to all datasets
-  const unit = dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2';
+  const unit = dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2';
   meta.push(`# attribute -- name: column_density, description: column density of ${dataset.molecule}, type: numeric, unit: ${unit}, editable: false`);
-  const errorMes = ((dataset.folded === 'undefined') || (dataset.folded && dataset.folded.useSEM)) 
+  const errorMes = ((dataset.folded === undefined) || (dataset.folded && dataset.folded.useSEM)) 
     ? 'standard error of mean ' 
     : 'standard deviation';
   meta.push(`# attribute -- name: uncertainty, description: uncertainy (${errorMes}) in column density, unit: ${unit} , type: numeric, editable: false`);
@@ -467,8 +467,8 @@ export function samplesToJSON(dataset: Prettify<UserDataset>, includeMeta = true
     headers, 
     meta: includeMeta ? createCODAPMeta(dataset) : undefined,
     units: includeUnits ? [
-      dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
-      dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
+      dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
+      dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
       '', // localDateTime
       '', // utcDateTime
       '', // localDate
@@ -545,8 +545,8 @@ export function foldedSamplesToJSON(dataset: UserDataset, includeMeta = true, in
   ];
   
   const units = useTimes ? [
-    dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
-    dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
+    dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
+    dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
     '', // utcDateTime
     '', // localDateTime
     '', // localDate
@@ -554,8 +554,8 @@ export function foldedSamplesToJSON(dataset: UserDataset, includeMeta = true, in
     '', // timezone
     'hours', // utcOffsetHours
   ] : [
-    dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
-    dataset.molecule === 'o3' ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
+    dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // columnDensity
+    dataset.molecule.startsWith('o3') ? 'Dobson Units' : 'molecules per cm^2', // uncertainty
     foldedDataBinUnit(dataset.folded.foldType), // folded bin numeric
     '', // folded bin value
   ];  

@@ -17,8 +17,8 @@
       v-bind="cardProps"
     >
       <slot name="info">
-        <v-card-text v-if="infoHtml"><span style="padding:0;margin:0" v-html="infoHtml"/></v-card-text>
-        <v-card-text v-else>{{ infoText }}</v-card-text>
+        <v-card-text class="pa-2" v-if="infoHtml"><span style="padding:0;margin:0" v-html="infoHtml"/></v-card-text>
+        <v-card-text class="pa-2" v-else>{{ infoText }}</v-card-text>
       </slot>
     </v-card>
   </v-menu>
@@ -45,9 +45,10 @@ if (props.width != undefined) {
 
 <style scoped>
 .info-card {
-  padding: 10px;
+  padding: 5px;
   border-radius: 5px;
   outline: 1px solid rgb(var(--v-theme-surface-variant));
+  font-size: 14px;
 }
 
 .v-btn {

@@ -5,8 +5,8 @@ import type { Map } from "maplibre-gl";
 import { isComputedRef } from "@/utils/vue";
 import * as zipson from "zipson";
 
-import type { AggValue, InitMapOptions, LatLngPair, MappingBackends, SelectionType, TimeRange, UnifiedRegion, UserDataset } from "@/types";
-import { ESRI_URLS_V03, ESRI_URLS_V04, MoleculeType } from "@/esri/utils";
+import type { AggValue, InitMapOptions, LatLngPair, LayerReadiness, LayerStatus, MappingBackends, SelectionType, TimeRange, UnifiedRegion, UserDataset } from "@/types";
+import { moleculeServiceConfigs, MoleculeType } from "@/esri/utils";
 import { TempoDataService, FetchOptions } from "@/esri/services/TempoDataService";
 import { useUniqueTimeSelection } from "@/composables/useUniqueTimeSelection";
 import { useTimezone, type Timezone } from "@/composables/useTimezone";
@@ -51,6 +51,8 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
   const showAdvancedLayers = ref(false);
   const showRGBMode = ref(false);
 
+  const globalWarning = ref("");
+  const showTourHint = ref(false);
 
   const showAggregationControls = ref(false);
 
@@ -61,7 +63,10 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
   const timezoneOptions = computed(() => tzOptions(singleDateSelected.value));
   
   const shownLayers = ref<string[]>([]);
-  const layersReady = ref<globalThis.Map<string, boolean[]>>(new globalThis.Map<string, boolean[]>());
+  const layersReady = ref<globalThis.Map<string, LayerReadiness>>(new globalThis.Map<string, LayerReadiness>());
+
+  // probably should be a map of some sort, but for now it is only used with hms-fire layer which is prone to breaking
+  const layerAction = ref<{ layerId: string; action: string } | null>(null);
 
   // This part is still assuming that multiple maps will be temporally linked
   // If/when we want to make that not the case, we'll need to rethink this
@@ -87,14 +92,13 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
   const accentColor2 = ref("#ffcc33");
   const tempoRed = ref("#b60e32");
 
-
   function getTempoDataService(molecule: MoleculeType): TempoDataService {
     if (molecule in tempoDataServices) {
       return tempoDataServices[molecule];
     }
-    const v03 = ESRI_URLS_V03[molecule];
-    const v04 = ESRI_URLS_V04[molecule];
-    const tds = new TempoDataService([v03.url, v04.url], v03.variable);
+    // get urls for for this molecule
+    const configs = moleculeServiceConfigs(molecule);
+    const tds = new TempoDataService(configs.map(c => c.url), configs[configs.length - 1].variable);
     tempoDataServices[molecule] = tds;
     return tds;
   }
@@ -223,10 +227,18 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
     }
   }
 
-  function setLayerReady(layerName: string, serviceReady: boolean[]) {
+  function setLayerReady(layerName: string, serviceReady: boolean[], status?: LayerStatus) {
     const next = new globalThis.Map(layersReady.value);
-    next.set(layerName, [...serviceReady]);
+    next.set(layerName, {
+      status: status?.status ?? 'ready',
+      statusMsg: status?.statusMsg ?? [],
+      ready: [...serviceReady],
+    });
     layersReady.value = next;
+  }
+
+  function doLayerAction(layerId: string, action: string) {
+    layerAction.value = { layerId, action };
   }
 
   function clearLayerReady(layerName: string) {
@@ -292,7 +304,9 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
     
     try {
       const tds = getTempoDataService(dataset.molecule);
-      tds.setAvailableTimestamps(timestamps.value);
+      // Use this service's own timesteps rather than the app-wide timestamps.value. Not every
+      // tempo molecule covers the whole timeline (o3trop is V04-only), and we don't want to send bogus requests
+      tds.setAvailableTimestamps(await tds.getMergedTimesteps());
       const data = await tds.fetchTimeseriesData(dataset.region.geometryInfo, timeRanges, {onProgress});
       dataset.samples = data.values;
       dataset.errors = data.errors;
@@ -316,6 +330,7 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
 
     
     try {
+      tds.setAvailableTimestamps(await tds.getMergedTimesteps());
       const data = await tds.fetchCenterPointData(
         dataset.region.geometryInfo,
         timeRanges,
@@ -368,6 +383,8 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
 
   return {
     debugMode,
+    globalWarning,
+    showTourHint,
 
     accentColor,
     accentColor2,
@@ -453,6 +470,8 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
     layersReady,
     setLayerReady,
     clearLayerReady,
+    layerAction,
+    doLayerAction,
 
     reset,
   };
@@ -498,7 +517,7 @@ export function deserializeTempoStore(value: string, compressed: boolean): State
   return parsed;
 }
 
-const OMIT = new Set(["debugMode", "selectionActive", "maps", "layersReady"]);
+const OMIT = new Set(["debugMode", "selectionActive", "maps", "layersReady", "globalWarning", "layerAction", "showTourHint"]);
 export function serializeTempoStore(store: TempoStore, compress: boolean): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const state: Record<string, any> = {};
@@ -530,6 +549,9 @@ export function postDeserializeTempoStore(store: TempoStore) {
 export function updateStoreFromJSON(store: TempoStore, json: string, compressed: boolean): boolean {
   try {
     const state = deserializeTempoStore(json, compressed);
+    if (store.timestampsLoaded) {
+      delete state.timestamps;
+    }
     store.$patch(state);
     postDeserializeTempoStore(store);
     return true;

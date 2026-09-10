@@ -27,6 +27,16 @@
     </cds-dialog> -->
 
     <!-- </div> -->
+    <cds-dialog 
+      title="About the Data" 
+      v-model="showAboutData" 
+      :color="accentColor2" 
+      max-height="80vh" 
+      max-width="700px"
+    >
+      <about-data />
+    </cds-dialog>
+
     <cds-dialog title="What's new" v-model="showChanges" :color="accentColor2">
       <ul class="snackbar-alert-ul">
         <li class="change-item mb-5" v-for="change in changes" :key="change.date" :data-date="change.date">
@@ -57,16 +67,44 @@
         <v-icon>mdi-creation</v-icon>
       </v-btn>
 
-     <v-btn
-        @click="showSaveDialog = !showSaveDialog"
-        class="save-button"
-        aria-label="Save my progress"
+    <div class="tour-button-wrapper">
+      <v-btn
+        @click="() => {
+          getIntroTour(store).start();
+        }"
+        id="tour-button"
+        class="intro-tour-button"
+        aria-label="Start intro tour"
         variant="outlined"
         rounded="lg"
         density="default"
         :color="accentColor2"
         elevation="0"
         size="lg"
+      >
+        <v-tooltip location="bottom" activator="parent" :disabled="mobile" text="Start intro tour"></v-tooltip>
+          <font-awesome-icon
+            icon="fa-signs-post"
+            size="lg"
+          />
+      </v-btn>
+      <transition name="tour-hint-fade">
+        <div v-if="showTourHintVisible" class="tour-hint-bubble">
+          Open tour here any time
+        </div>
+      </transition>
+    </div>
+
+     <v-btn
+       @click="showSaveDialog = !showSaveDialog"
+       class="save-button"
+       aria-label="Save my progress"
+       variant="outlined"
+       rounded="lg"
+       density="default"
+       :color="accentColor2"
+       elevation="0"
+       size="lg"
       >
         <v-tooltip location="bottom" activator="parent" :disabled="mobile" text="Export current state"></v-tooltip>
         <v-icon>mdi-file-arrow-up-down</v-icon>
@@ -107,12 +145,11 @@
               User Guide
             </v-list-item>
             
-            <v-list-item 
+            <v-list-item
               tabindex="0"
               aria-label="Show dialog telling about the data"
               @click="showAboutData = true"
               @keyup.enter="showAboutData = true"
-              disabled
               >
               About the Data
             </v-list-item>
@@ -162,16 +199,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useDisplay } from "vuetify";
 import { supportsTouchscreen } from "@cosmicds/vue-toolkit";
 
 import { useTempoStore } from "@/stores/app";
 import changes from "@/changes";
+import AboutData from "@/components/AboutData.vue";
 
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
+import { getIntroTour } from "@/utils/tours";
 
 library.add(faArrowsRotate);
 
@@ -183,6 +222,7 @@ const emit = defineEmits<{
 const store = useTempoStore();
 const {
   accentColor2,
+  showTourHint,
 } = storeToRefs(store);
 
 const display = useDisplay();
@@ -194,12 +234,31 @@ const showSaveDialog = ref(false);
 const showErrorSnackbar = ref(false);
 const ioErrorMessage = ref("");
 
+const showTourHintVisible = ref(false);
+const tourHintAlreadyShown = ref(false);
+let tourHintTimeout: ReturnType<typeof setTimeout> | undefined;
+
+watch(showTourHint, (visible) => {
+  if (!visible) {
+    return;
+  }
+  store.showTourHint = false;
+  if (tourHintAlreadyShown.value) {
+    return;
+  }
+  tourHintAlreadyShown.value = true;
+  showTourHintVisible.value = true;
+  clearTimeout(tourHintTimeout);
+  tourHintTimeout = setTimeout(() => {
+    showTourHintVisible.value = false;
+  }, 5000);
+});
+
 const touchscreen = supportsTouchscreen();
 
 const smallSize = computed(() => {
   return display.smAndDown.value;
 });
-
 
 const mobile = computed(() => {
   return smallSize.value && touchscreen;
@@ -215,9 +274,9 @@ function reportError(_error: string, message: string) {
 #title {
   color: var(--smithsonian-yellow);
   font-weight: 600;
-  font-size: 2.5rem;
+  font-size: clamp(1rem, 4vw, 2.5rem);
   text-align: center;
-  text-wrap: nowrap;
+  text-wrap: wrap;
   flex-grow: 1;
 }
 
@@ -244,7 +303,7 @@ a[href="https://tempo.si.edu"]>img {
     outline: 1px solid transparent;
   }
 
-  .layers-button, .save-button {
+  .layers-button, .save-button, .intro-tour-button {
     padding: 8px;
   }
 
@@ -263,6 +322,48 @@ a[href="https://tempo.si.edu"]>img {
   }
 }
 
+.tour-button-wrapper {
+  position: relative;
+}
 
+.tour-hint-bubble {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 100;
+  padding: 10px 14px;
+  background: #1a1a2e;
+  border: 1px solid var(--smithsonian-yellow);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: #eaeaea;
+  font-family: "Lexend", sans-serif;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.tour-hint-bubble::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  right: 16px;
+  width: 12px;
+  height: 12px;
+  margin-bottom: -6px;
+  background: #1a1a2e;
+  border-top: 1px solid var(--smithsonian-yellow);
+  border-left: 1px solid var(--smithsonian-yellow);
+  transform: rotate(45deg);
+}
+
+.tour-hint-fade-enter-active,
+.tour-hint-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.tour-hint-fade-enter-from,
+.tour-hint-fade-leave-to {
+  opacity: 0;
+}
 
 </style>

@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - dev
+      # - dev
 
 jobs:
   build:
@@ -64,41 +64,50 @@ jobs:
         with:
           cmd: cat package.json | jq -r '.draft // false'
 
-      - name: Create folder for deployment
+      # - name: Create folder for deployment
+      #   run: |
+      #     mkdir deployment
+      #     mkdir deployment/dev
+
+          # - name: Move current build to deployment
+          #   id: prepare
+          #   env:
+          #     BRANCH: ${{ github.head_ref || github.ref_name }}
+          #   run: |
+          #     echo "Current branch: ${BRANCH}"
+          #     [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
+          #     echo "Folder to use: ${folder}"
+          #     mv dist/* deployment/${folder}
+          #     [[ "$BRANCH" == "dev" ]] && other="main" || other="dev"
+          #     echo "Other branch: ${other}"
+          #     echo "other=${other}" >> "$GITHUB_OUTPUT"
+
+          # - name: Check out the other branch
+          #   uses: actions/checkout@v3
+          #   with:
+          #     ref: ${{ steps.prepare.outputs.other }}
+          #     path: other
+
+          # - name: Build other branch and move to deployment
+          #   env:
+          #     BRANCH: ${{ steps.prepare.outputs.other }}
+          #     VUE_APP_MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+          #     VUE_APP_CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
+          #   run: |
+          #     cd other
+          #     yarn install
+          #     yarn build
+          #     [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
+          #     mv dist/* ../deployment/${folder}
+
+      - name: Set up deployment folder
         run: |
-          mkdir deployment
+          mv dist deployment
           mkdir deployment/dev
 
-      - name: Move current build to deployment
-        id: prepare
-        env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+      - name: Set up dev redirect
         run: |
-          echo "Current branch: ${BRANCH}"
-          [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
-          echo "Folder to use: ${folder}"
-          mv dist/* deployment/${folder}
-          [[ "$BRANCH" == "dev" ]] && other="main" || other="dev"
-          echo "Other branch: ${other}"
-          echo "other=${other}" >> "$GITHUB_OUTPUT"
-
-      - name: Check out the other branch
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ steps.prepare.outputs.other }}
-          path: other
-
-      - name: Build other branch and move to deployment
-        env:
-          BRANCH: ${{ steps.prepare.outputs.other }}
-          VUE_APP_MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
-          VUE_APP_CDS_API_KEY: ${{ secrets.CDS_API_KEY }}
-        run: |
-          cd other
-          yarn install
-          yarn build
-          [[ "$BRANCH" == "dev" ]] && folder="dev" || folder="."
-          mv dist/* ../deployment/${folder}
+          cp redirect.html deployment/dev/index.html
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4

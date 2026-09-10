@@ -38,7 +38,7 @@
         @keyup.enter="() => copy(clipboardCSV)"
       >
         <v-icon icon="mdi-clipboard-check-multiple" color="#ffcc33" />
-        <span class="save-csv__label">Copy CSV to clipboard</span>
+        <span class="save-csv__label">Copy to clipboard</span>
       </v-btn>
     </use-clipboard>
     </div>

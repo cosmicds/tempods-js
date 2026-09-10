@@ -1,8 +1,9 @@
 import { ref, type Ref } from "vue";
-import { Map, Popup, type GeoJSONSource } from "maplibre-gl";
+import { Map, Popup } from "maplibre-gl";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { createHeatmapColorMap, previewColormapInConsole } from "@/colormaps/utils";
 import { PrimSource } from "@/assets/power_plants";
+import { useGeoJsonLayer } from "@/composables/useGeoJsonLayer";
 
 
 
@@ -29,24 +30,23 @@ export const POWER_PLANT_COLORS: Record<PrimSource, string> = {
 export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true) {
   const powerPlantsLayerId = "power-plants-layer";
   const powerPlantsHeatmapLayerId = "power-plants-heatmap";
-  const powerPlantsSourceId = "power-plants-source";
   const powerPlantsVisible = ref(startVisible);
   const loading = ref(false);
   let loadPromise: Promise<GeoJSON.FeatureCollection> | null = null;
   // let usingHeatmap = false;
-
+  
   function togglePowerPlants(vis?: boolean | undefined) {
     if (!map || !map.value) return;
     const layerIDs = [powerPlantsLayerId, powerPlantsHeatmapLayerId];
     layerIDs.forEach(id => {
       if (!map.value || !map.value!.getLayer(id)) return;
-      
+
       if (vis !== undefined) {
         powerPlantsVisible.value = vis;
         map.value.setLayoutProperty(id, "visibility", vis ? "visible" : "none");
         return;
       }
-      
+
       const visibility = map.value.getLayoutProperty(
         id,
         "visibility"
@@ -60,22 +60,18 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
       }
     });
   }
-  
   function isValidMap(map: Ref<Map | null> | null): map is Ref<Map> {
     return map !== null && map.value !== null;
   }
-
-  // asynchronously load the heavy GeoJSON chunk and update the source when ready
+  // asynchronously load the heavy GeoJSON chunk and update both sources when ready
   function ensureDataLoaded() {
     if (loadPromise) return loadPromise;
     loading.value = true;
     loadPromise = import("@/assets/power_plants")
       .then((mod) => mod.powerPlantsGeoJSON as GeoJSON.FeatureCollection)
       .then((data) => {
-        if (isValidMap(map)) {
-          const src = map.value.getSource(powerPlantsSourceId) as GeoJSONSource | undefined;
-          if (src) src.setData(data);
-        }
+        circleLayer.setData(data);
+        heatmapLayer.setData(data);
         return data;
       })
       .finally(() => {
@@ -84,44 +80,13 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
     return loadPromise;
   }
 
-  function addSource() {
-    if (!isValidMap(map)) return;
-    
-    if (!map.value.getSource(powerPlantsSourceId)) {
-      map.value.addSource(powerPlantsSourceId, {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-    }
-    // kick off loading in the background; do not await
-    ensureDataLoaded();
-  }
 
-  function addLayer(op = {minzoom: 0}) {
-    if (!isValidMap(map)) return;
-    
-    addSource();
-
-    if (map.value.getLayer(powerPlantsLayerId)) {
-      console.error("Power plants layer already exists.");
-      return;
-    }
-    
-    // Create a popup, but don't add it to the map yet.
-    //https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/
-    const popup = new Popup({
-      closeButton: true,
-      closeOnClick: false,
-      className: 'powerplant-popup'
-    });
-
-
-    // add a point layer for power plants
-    map.value.addLayer({
+  const circleLayer = useGeoJsonLayer("power-plants", null, {
+    sourceId: "power-plants-source",
+    layerOptions: {
       id: powerPlantsLayerId,
       type: "circle",
-      source: powerPlantsSourceId,
-      minzoom: op.minzoom || 0,
+      minzoom: 0,
       layout: {
         visibility: powerPlantsVisible.value ? "visible" : "none",
       },
@@ -140,27 +105,27 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
         "circle-color": [
           "match",
           ["get", "PrimSource"],
-          
+
           // Traditional Sources (Black, Gray, Brown)
           'coal',          POWER_PLANT_COLORS.coal,
           'petroleum',     POWER_PLANT_COLORS.petroleum,
           'natural gas',   POWER_PLANT_COLORS['natural gas'],
-          
+
           // Renewable Sources (Bright & Cool Hues)
           'solar',         POWER_PLANT_COLORS.solar,
           'wind',          POWER_PLANT_COLORS.wind,
           'hydroelectric', POWER_PLANT_COLORS.hydroelectric,
           'geothermal',    POWER_PLANT_COLORS.geothermal,
           'biomass',       POWER_PLANT_COLORS.biomass,
-          
+
           // Storage & Unique Sources (Magenta, Purple, Light Blue)
           'nuclear',       POWER_PLANT_COLORS.nuclear,
           'batteries',     POWER_PLANT_COLORS.batteries,
           'pumped storage', POWER_PLANT_COLORS['pumped storage'],
-          
+
           // Fallback
           /* other */ POWER_PLANT_COLORS.other // Lightest Gray
-          
+
         ],
         "circle-opacity": 1,
         "circle-stroke-width": 1,
@@ -176,15 +141,33 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
           /* default */    "#FFFFFF"
         ]
       },
+    }
+  });
+
+ 
+  function addLayer(_op = {minzoom: 0}) {
+    if (!isValidMap(map)) return;
+
+    circleLayer.addToMap(map.value);
+
+    // kick off loading in the background; do not await
+    ensureDataLoaded();
+
+    // Create a popup, but don't add it to the map yet.
+    //https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/
+    const popup = new Popup({
+      closeButton: true,
+      closeOnClick: false,
+      className: 'powerplant-popup'
     });
-    //
-    
+
+
     let currentFeatureCoordinates = undefined;
-    
+
     map.value.on('mouseenter', powerPlantsLayerId, () => {
       map.value.getCanvas().style.cursor = 'pointer';
     });
-    
+
     map.value.on('click', powerPlantsLayerId, (e) => {
       if (!e.features || e.features.length === 0) {
         return;
@@ -197,7 +180,7 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
 
         // Change the cursor style as a UI indicator.
         map.value.getCanvas().style.cursor = 'pointer';
-        
+
         // eslint-disable-next-line
         // @ts-ignore
         const coordinates = e.features[0].geometry.coordinates.slice();
@@ -231,19 +214,23 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
     ////
   }
 
-    
+  
   function addheatmapLayer() {
     if (!isValidMap(map)) return;
-    
-    addSource();
-    
-    // get screen pixel ratio
-    const pixelRatio = window.devicePixelRatio || 1;
-    
-    map.value.addLayer( {
+
+    heatmapLayer.addToMap(map.value);
+
+    addLayer(); // add the point layer on top of the heatmap
+
+  }
+  // get screen pixel ratio
+  const pixelRatio = window.devicePixelRatio || 1;
+
+  const heatmapLayer = useGeoJsonLayer("power-plants-heatmap", null, {
+    sourceId: "power-plants-heatmap-source",
+    layerOptions: {
       id: powerPlantsHeatmapLayerId,
       type: 'heatmap',
-      source: powerPlantsSourceId,
       // maxzoom: 5,
       paint: {
         "heatmap-radius": [
@@ -260,7 +247,7 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
           'interpolate',
           ['linear'],
           ['get', 'Install_MW'],
-          0, // 
+          0, //
           0, // density is 0 at 0 MW
           1000,
           1, // densitity = 1 @ 1 GW
@@ -303,41 +290,15 @@ export function addPowerPlants(map: Ref<Map | null> | null, startVisible = true)
         //   0 // opacity = 0 @ zoom = 5
         // ],
       }
+    }
 
-    });
-    
-    addLayer(); // add the point layer on top of the heatmap
-    
-    // usingHeatmap = true;
-    
-    /** we don't need to sync visibility, we will handle these two independently **/
-    // map.value.on('idle', () => {
-    //   if (!isValidMap(map)) return;
-    //   if (usingHeatmap) {
-    //     if (map.value.getLayer(powerPlantsLayerId) && map.value.getLayer(powerPlantsHeatmapLayerId)) {
-    //       const heatmapVis = map.value.getLayoutProperty(powerPlantsHeatmapLayerId, 'visibility');
-    //       map.value.setLayoutProperty(powerPlantsLayerId, 'visibility', heatmapVis);
-          
-    //     }
-    //   }
-      
-    // }); 
-    
-  }
-  
+  });
+
+
+
   function removeLayer() {
-    if (!map || !map.value) return;
-    [powerPlantsLayerId, powerPlantsHeatmapLayerId].forEach(id => {
-      if (!map || !map.value) return;
-      
-      if (map.value.getLayer(id)) {
-        map.value.removeLayer(id);
-      }
-
-      if (map.value.getSource(id)) {
-        map.value.removeSource(id);
-      }
-    });
+    circleLayer.cleanup();
+    heatmapLayer.cleanup();
   }
 
   return {
