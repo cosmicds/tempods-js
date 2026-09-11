@@ -51,7 +51,7 @@
           @click.stop="() => emit('edit-time-range', timeRange)"
         ></v-btn>
         <v-tooltip
-          :text="hasDatasets(timeRange) ? 'Cannot delete if time range has datasets' : 'Delete'"
+          :text="hasDatasets(timeRange) ? 'Cannot delete if used in a dataset' : 'Delete'"
           location="left"
         >
           <template #activator="{ props }">

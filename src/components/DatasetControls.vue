@@ -134,7 +134,7 @@
                     <div class="datset-controls-action-buttons region-action-buttons">
                     <v-btn
                       variant="plain"
-                      v-tooltip:top="'Edit Name and Color'"
+                      v-tooltip:top="'Edit Name /  Color'"
                       icon="mdi-pencil"
                       color="white"
                       size="small"
@@ -144,7 +144,7 @@
                       }"
                     ></v-btn>
                     <v-tooltip
-                      :text="store.regionHasDatasets(region as UnifiedRegionType) ? 'Cannot delete if region has datasets' : 'Delete'"
+                      :text="store.regionHasDatasets(region as UnifiedRegionType) ? 'Cannot delete if used in a dataset' : 'Delete'"
                       location="left"
                     >
                       <template #activator="{ props }">

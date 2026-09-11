@@ -120,7 +120,7 @@
             </v-tooltip>
 
             <v-tooltip
-              text="Edit Dataset Name/Color"
+              text="Edit Dataset Name / Color"
               location="top"
             >
               <template #activator="{ props }">
