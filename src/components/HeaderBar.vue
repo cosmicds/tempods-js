@@ -106,7 +106,7 @@
      <v-btn
        @click="showSaveDialog = !showSaveDialog"
        class="save-button"
-       aria-label="Export current state"
+       aria-label="Save my progress"
        variant="outlined"
        rounded="lg"
        density="default"

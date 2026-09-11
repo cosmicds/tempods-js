@@ -106,7 +106,7 @@ async function saveLocalFileSystemAPI(store: TempoStore): Promise<boolean> {
     multiple: false,
   };
 
-  const content = serializeTempoStore(store);
+  const content = serializeTempoStore(store, false);
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore window *might* have this, and if we're here it should
@@ -126,7 +126,7 @@ async function saveLocalFileSystemAPI(store: TempoStore): Promise<boolean> {
 }
 
 function saveLocalLink(store: TempoStore) {
-  const content = serializeTempoStore(store);
+  const content = serializeTempoStore(store, false);
 
   const blob = new Blob([content], { type: "application/json" });
   const link = document.createElement("a");
@@ -166,7 +166,7 @@ async function loadLocalFileSystemAPI(): Promise<boolean> {
   const file = await handle.getFile();
   const content = await file.text();
 
-  const result = updateStoreFromJSON(store, content);
+  const result = updateStoreFromJSON(store, content, false);
   if (result) {
     return true;
   } else {
@@ -188,7 +188,7 @@ function loadLocalInput() {
       reader.onload = function (evt) {
         if (!evt || !evt.target) { return; }
         const content = evt.target.result as string;
-        const result = updateStoreFromJSON(store, content);
+        const result = updateStoreFromJSON(store, content, false);
         if (result) {
           emit("load-local");
         } else {
