@@ -29,6 +29,18 @@
         </v-btn>
       </template>
     </v-snackbar>
+    <header-warning
+      v-model="showHeaderWarning"
+      color="warning"
+      icon="mdi-alert"
+    >
+    <div>
+      The TEMPO, Population data, and other layers may be unavailable between August 31st - September 4th 
+      due to a scheduled upgrade of the NASA Earthdata GIS service. 
+      See <a style="color: currentColor;" href="https://gis.earthdata.nasa.gov/portal/home/index.html" target="_blank" rel="noopener">NASA Earthdata GIS</a>
+      for more information. We apologize for the inconvenience. 
+    </div>
+    </header-warning>
     <header-bar />
     <div ref="root" class="layout-root">
       <side-placeholder
@@ -195,6 +207,13 @@ const {
   layerControlsOpen,
   globalWarning,
 } = storeToRefs(store);
+
+// The NASA Earthdata GIS outage window, in UTC (EDT is UTC-4, so 5pm EDT = 21:00 UTC).
+// Months are 0-indexed.
+const warningStart = new Date(Date.UTC(2026, 7, 30));  // Aug 30, 2026, 0 UTC
+const warningEnd = new Date(Date.UTC(2026, 8, 5, 21));  // Sept 5, 2026, 5pm EDT
+const now = new Date();
+const showHeaderWarning = ref(now >= warningStart && now < warningEnd);
 
 const showAlert = ref(!!globalWarning.value);
 watch(globalWarning, (newVal) => {

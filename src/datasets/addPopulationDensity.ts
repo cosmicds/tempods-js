@@ -79,7 +79,7 @@ const countRaster = {
 };
 
 // Esri Image Service URL for GPWv4 Population Density
-const gpw4url = `https://gis.earthdata.nasa.gov/image/rest/services/gpw-v4/${density}/ImageServer`;
+const gpw4url = `https://gis.earthdata.nasa.gov/portal/rest/services/gpw-v4/${density}/ImageServer`;
 
 import { sampleColormap } from "@/colormaps/utils";
 const populationLayerOptions = {};
