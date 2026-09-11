@@ -13,20 +13,25 @@
     :drag-predicate="titleBarPredicate"
   > 
     <new-data-generic-aggregation
-      v-if="mode === 'new'"
+      v-if="mode === 'new' && hasSamples"
       v-model="dialogOpen"
       v-model:show-controls="aggControlsVisible"
       :selection="selection"
       @save="saveFolded"
       @plot-click="handlePlotClick"
     />
+    <div v-else>
+      This dataset has no samples. 
+      <br />
+      Please create a new dataset by pressing <span class="pa-1" style="background-color: #ffcc33; color: black;">New Dataset</span> on the right.
+    </div>
   </cds-dialog>
 
   
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import type { UserDataset, UnifiedRegion, MoleculeType} from '../types';
 import NewDataGenericAggregation from './DataFoldingAndBinning.vue';
 import { moleculeDescriptor } from '@/esri/utils';
@@ -43,6 +48,8 @@ const dialogOpen = defineModel<boolean>('modelValue', { type: Boolean, required:
 const aggControlsVisible = ref(false);
 
 const mode = ref<'aggregate' | 'fold' | 'new'>('new');
+
+const hasSamples = computed(() => Object.keys(selection?.samples ?? {}).length > 0);
 
 const emit = defineEmits<{
   (event: 'save', aggregatedSelection: UserDataset): void;

@@ -29,12 +29,24 @@
         </v-btn>
       </template>
     </v-snackbar>
+    <header-warning
+      v-model="showHeaderWarning"
+      color="warning"
+      icon="mdi-alert"
+    >
+    <div>
+      The TEMPO, Population data, and other layers may be unavailable between August 31st - September 4th 
+      due to a scheduled upgrade of the NASA Earthdata GIS service. 
+      See <a style="color: currentColor;" href="https://gis.earthdata.nasa.gov/portal/home/index.html" target="_blank" rel="noopener">NASA Earthdata GIS</a>
+      for more information. We apologize for the inconvenience. 
+    </div>
+    </header-warning>
     <header-bar />
     <div ref="root" class="layout-root">
       <side-placeholder
         id="layers-panel"
         ref="layers-panel"
-        class="panel"
+        class="panel scroll-y"
         open-direction="right"
         icon="mdi-layers"
         :color="accentColor2"
@@ -88,7 +100,7 @@
         </template>
       </v-tooltip>
 
-      <map-with-controls id="map-panel" />
+      <map-with-controls id="map-panel" class="scroll-y" />
 
       <v-tooltip
         text="Change panel width"
@@ -109,7 +121,7 @@
       <side-placeholder
         id="datasets-panel"
         ref="datasets-panel"
-        class="panel"
+        class="panel scroll-y"
         open-direction="left"
         icon="mdi-chart-line"
         :color="accentColor2"
@@ -195,6 +207,13 @@ const {
   layerControlsOpen,
   globalWarning,
 } = storeToRefs(store);
+
+// The NASA Earthdata GIS outage window, in UTC (EDT is UTC-4, so 5pm EDT = 21:00 UTC).
+// Months are 0-indexed.
+const warningStart = new Date(Date.UTC(2026, 7, 30));  // Aug 30, 2026, 0 UTC
+const warningEnd = new Date(Date.UTC(2026, 8, 5, 21));  // Sept 5, 2026, 5pm EDT
+const now = new Date();
+const showHeaderWarning = ref(now >= warningStart && now < warningEnd);
 
 const showAlert = ref(!!globalWarning.value);
 watch(globalWarning, (newVal) => {
@@ -475,16 +494,14 @@ body {
   height: 100%;
 }
 
-.map-panel {
+// this was a class and should have been an id selector,
+// so only left important things
+#map-panel {
   min-width: 250px;
-  display: flex;
-  flex-direction: row;
   padding-left: 10px;
-  gap: 5px;
 }
 
 #layers-panel, #datasets-panel {
-  overflow-y: scroll;
   /* these were already 0, just make 
   what we're starting with clearer */
   margin: 0;
@@ -547,7 +564,6 @@ body {
   width: 100%;
   background: var(--panel);
   box-sizing: border-box;
-  overflow: auto;
   border: 1px solid rgba(255,255,255,0.06);
 }
 

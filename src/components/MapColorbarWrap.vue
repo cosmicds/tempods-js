@@ -13,7 +13,7 @@
       <template v-slot:label>
         <div v-if="scalePower !== 0" style="text-align: center;">
           Amount of <span v-html="moleculeLabel"></span>
-          <span class="unit-label">(10<sup>{{ scalePower }}</sup> mol/cm<sup>2</sup>)</span>
+          <span class="unit-label">(10<sup>{{ scalePower }}</sup> molecules/cm<sup>2</sup>)</span>
         </div>
         <div v-else style="text-align: center;">
           Amount of <span v-html="moleculeLabel"></span>
@@ -37,7 +37,7 @@
       <template v-slot:label>
         <div v-if="scalePower !== 0" style="text-align: center;">
           Amount of <span v-html="moleculeLabel"></span>
-          <span class="unit-label">(10<sup>{{ scalePower }}</sup> mol/cm<sup>2</sup>)</span>
+          <span class="unit-label">(10<sup>{{ scalePower }}</sup> molecules/cm<sup>2</sup>)</span>
         </div>
         <div v-else style="text-align: center;">
           Amount of <span v-html="moleculeLabel"></span>

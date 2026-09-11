@@ -1,5 +1,5 @@
 <template>    
-    <div class="multi-plot-container">      
+    <div class="multi-plot-container scroll-y">
       <div class="multi-plot-container__plot"  v-for="(group, index) in datasetsGroupedByMolecule" :key="group[0]">
         <MultiDatasetPlot
           :datasets="group[1]"
@@ -49,7 +49,7 @@ const commonLayoutOptions: Partial<Layout> = deepMerge(
       automargin: false,
       gridcolor: 'rgba(128, 128, 128, 0.3)',
       title: {
-        standoff: 10,
+        standoff: 22,
       },
     },
     yaxis: {
@@ -89,7 +89,6 @@ div.multi-plot-container {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  overflow-y: auto;
   max-height: calc(90vh - 100px);
   align-items: center;
   width: 100%;

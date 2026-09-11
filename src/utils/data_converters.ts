@@ -237,7 +237,7 @@ export function createCODAPMeta(dataset: Prettify<UserDataset>): string[] {
   const errorMes = ((dataset.folded === undefined) || (dataset.folded && dataset.folded.useSEM)) 
     ? 'standard error of mean ' 
     : 'standard deviation';
-  meta.push(`# attribute -- name: uncertainty, description: uncertainy (${errorMes}) in column density, unit: ${unit} , type: numeric, editable: false`);
+  meta.push(`# attribute -- name: uncertainty, description: uncertainty (${errorMes}) in column density, unit: ${unit} , type: numeric, editable: false`);
   
   // Description common to all datasets
   const regionCenterCoords = regionCenter(dataset.region);

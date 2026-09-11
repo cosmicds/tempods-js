@@ -17,6 +17,7 @@ import MarqeeAlert from "./components/MarqeeAlert.vue";
 import TimeseriesGraph from "./components/TimeseriesGraph.vue";
 import SelectionComposer from "./components/SelectionComposer.vue";
 import HeaderBar from "./components/HeaderBar.vue";
+import HeaderWarning from "./components/HeaderWarning.vue";
 import DatasetControls from "./components/DatasetControls.vue";
 import ComparisonDataControls from "./components/ComparisonDataControls.vue";
 import MapControls from "./components/MapControls.vue";
@@ -54,6 +55,7 @@ import '@vuepic/vue-datepicker/dist/main.css';
 import "./styles/vue3-date-picker-styles.css";
 import "./styles/molecule-svg.css";
 import "./styles/styles.css";
+import "./styles/scrollbars.css";
 import { UseClipboard } from "@vueuse/components";
 
 import "shepherd.js/dist/css/shepherd.css";
@@ -129,6 +131,7 @@ createApp(TempoLab, {})
   .component('map-controls', MapControls)
   .component('map-with-controls', MapWithControls)
   .component('header-bar', HeaderBar)
+  .component('header-warning', HeaderWarning)
   .component('popup-info-button', PopupInfoButton)
   .component('layer-control-item', MaplibreLayerControlItem)
   .component('layer-order-control', LayerOrderControl)

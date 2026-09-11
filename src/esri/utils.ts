@@ -7,7 +7,7 @@ export type { MoleculeType } from "@/types";
 
 export const ESRI_URLS_V03: Record<MoleculeType, { url: string; variable: VariableNames }> = {
   'no2': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C2930763263-LARC_CLOUD/TEMPO_NO2_L3_V03_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C2930763263-LARC_CLOUD/TEMPO_NO2_L3_V03_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer",
     variable: "NO2_Troposphere",
   },
   // 'no2Monthly': {
@@ -19,7 +19,7 @@ export const ESRI_URLS_V03: Record<MoleculeType, { url: string; variable: Variab
   //   variable: "NO2_Troposphere",
   // },
   'o3': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C2930764281-LARC_CLOUD/TEMPO_O3TOT_L3_V03_HOURLY_OZONE_COLUMN_AMOUNT/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C2930764281-LARC_CLOUD/TEMPO_O3TOT_L3_V03_HOURLY_OZONE_COLUMN_AMOUNT/ImageServer",
     variable: "Ozone_Column_Amount",
   },
   'o3trop': {
@@ -27,7 +27,7 @@ export const ESRI_URLS_V03: Record<MoleculeType, { url: string; variable: Variab
     variable: "0-2_km_Column_Ozone",
   },
   'hcho': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C2930761273-LARC_CLOUD/TEMPO_HCHO_L3_V03_HOURLY_VERTICAL_COLUMN/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C2930761273-LARC_CLOUD/TEMPO_HCHO_L3_V03_HOURLY_VERTICAL_COLUMN/ImageServer",
     variable: "HCHO",
   },
   // 'hchoMonthly': {
@@ -42,19 +42,19 @@ export const ESRI_URLS_V03: Record<MoleculeType, { url: string; variable: Variab
 
 export const ESRI_URLS_V04: Record<MoleculeType, { url: string; variable: VariableNames }> = {
   'no2': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C3685896708-LARC_CLOUD/TEMPO_NO2_L3_V04_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C3685896708-LARC_CLOUD/TEMPO_NO2_L3_V04_HOURLY_TROPOSPHERIC_VERTICAL_COLUMN/ImageServer",
     variable: "NO2_Troposphere",
   },
   'o3': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C3685896625-LARC_CLOUD/TEMPO_O3TOT_L3_V04_HOURLY_OZONE_COLUMN_AMOUNT/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C3685896625-LARC_CLOUD/TEMPO_O3TOT_L3_V04_HOURLY_OZONE_COLUMN_AMOUNT/ImageServer",
     variable: "Ozone_Column_Amount",
   },
   'o3trop': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C3685896402-LARC_CLOUD/TEMPO_O3PROF_L3_V04_HOURLY_0_2_KM_COLUMN_OZONE/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C3685896402-LARC_CLOUD/TEMPO_O3PROF_L3_V04_HOURLY_0_2_KM_COLUMN_OZONE/ImageServer",
     variable: "0-2_km_Column_Ozone",
   },
   'hcho': {
-    url: "https://gis.earthdata.nasa.gov/image/rest/services/C3685897141-LARC_CLOUD/TEMPO_HCHO_L3_V04_HOURLY_VERTICAL_COLUMN/ImageServer",
+    url: "https://gis.earthdata.nasa.gov/portal/rest/services/C3685897141-LARC_CLOUD/TEMPO_HCHO_L3_V04_HOURLY_VERTICAL_COLUMN/ImageServer",
     variable: "HCHO",
   },
 } as const;

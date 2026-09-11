@@ -1,0 +1,41 @@
+/*
+  Show scroll bars based on Chris Coyier's article
+   https://master.dev/blog/heads-up-on-custom-scrollbars-chrome-is-supporting-the-standard-now-which-overrides-the-old-pseudo-elements/ 
+   and https://developer.chrome.com/docs/css-ui/scrollbar-styling
+   We are trying to make "overlay" scrollbars (like default on macOS) appear like "classic" scrollbars
+*/
+
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Non-Standard, But More Styling-Capable Properties.
+   Setting a width gives us "classic scrollbars"
+   https://developer.chrome.com/docs/css-ui/scrollbar-styling */
+.scroll-y::-webkit-scrollbar {
+  width: 12px;
+}
+
+/* minimal styling */
+.scroll-y::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  /* transparent border + background-clip insets the thumb from the track edge */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.scroll-y::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.45);
+}
+.scroll-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Standardized Properties. The guard is Chrome specific since is supports webkit and standards */
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-y {
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    scrollbar-width: thin;
+  }
+}

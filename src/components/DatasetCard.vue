@@ -1,21 +1,22 @@
 <template>
   <v-list density="compact">
-    <v-hover
+    <!-- <v-hover
       v-slot="{ isHovering, props }"
-      v-for="dataset in datesetsWithNotFoldedFisrt"
+      v-for="(dataset, num) in datesetsWithNotFoldedFisrt"
       :key="dataset.id"
-    > 
+    >  -->
       <!-- create a checkbox input that will -->
     
       <v-list-item
-        v-bind="props"
+      v-for="(dataset, num) in datesetsWithNotFoldedFisrt"
+        :key="dataset.id"
         :ref="(el) => datasetRowRefs[dataset.id] = el"
         class="selection-item my-2 rounded-lg px-2"
         :style="{ 'background-color': isFolded(dataset) ? '#333' : '#999', 'color': isFolded(dataset) ? '#fff' : '#000' }"
         :ripple="touchscreen"
         density="compact"
         slim
-        @click="showDetails = !showDetails"
+        @click="showDetails[num] = !showDetails[num]"
       >
         <template v-slot:prepend v-if="turnOnSelection">
           <v-checkbox
@@ -39,8 +40,19 @@
               >
               {{ dataset.name ?? dataset.region.name }}
             </v-chip>
+            <!-- add show/hide details button -->
+            <v-btn
+              class="float-right"
+              :icon="showDetails[num] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+              variant="text"
+              density="compact"
+              v-tooltip:top="showDetails[num] ? 'Hide Details' : 'Show details'"
+              @click.stop="showDetails[num] = !showDetails[num]"
+            >
+            </v-btn>
             <v-expand-transition>
-              <div v-if="showDetails || isHovering" class="d-flex flex-wrap align-center ga-1 mb-1">
+              <!-- add || isHovering to put back hover behavior -->
+              <div v-if="showDetails[num]" class="d-flex flex-wrap align-center ga-1 mb-1">
                 <v-chip 
                   label
                   size="small" 
@@ -76,11 +88,11 @@
             </v-expand-transition>
           </div>
           <!-- this is where the actions will go -->
-          <slot name="action-row" :isHovering="isHovering ?? true" :dataset="dataset">
+          <slot name="action-row" :isHovering="true" :dataset="dataset">
           </slot>
         </template>
       </v-list-item>
-    </v-hover>
+    <!-- </v-hover> -->
   </v-list>
 
 
@@ -142,7 +154,7 @@ function _removeDataset(dataset: UserDataset) {
   delete datasetRowRefs[dataset.id];
 }
 
-const showDetails = ref(false);
+const showDetails = ref([...datasets.map(() => false)]);
 </script>
 
 <style scoped lang="less">

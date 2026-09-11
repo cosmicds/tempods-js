@@ -1,6 +1,8 @@
 import { GeoJSONSource, LngLatBoundsLike, Map } from "maplibre-gl";
 import { v4 } from "uuid";
 
+import { syncLayerVisibility } from "@/composables/useSyncedVisibilityAndOpacity";
+
 import { RectangleSelectionInfo, PointSelectionInfo, UnifiedRegion } from "../../types";
 
 const layerGetter = (m: Map, id: string) => m.getLayer(id);
@@ -16,16 +18,22 @@ function createBounds(info: RectangleSelectionInfo) {
   ];
 }
 
+function outlineLayerId(layerId: string): string {
+  return `${layerId}-outline`;
+}
 
 export function addRectangleLayer(
   map: Map,
+  id: string, 
   info: RectangleSelectionInfo,
   color: string,
   opacity=0.7,
   visible=true,
+  outlineColor="#000000",
+  outlineWidth=1.5,
 ) {
 
-  const uuid = v4();
+  const uuid = id ?? v4();
   const geoJson: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
     features: [{
@@ -59,7 +67,38 @@ export function addRectangleLayer(
     }
   });
 
-  return { layer: source };
+  const outlineId = outlineLayerId(uuid);
+  map.addLayer({
+    id: outlineId,
+    type: "line",
+    source: uuid,
+    paint: {
+      "line-color": outlineColor,
+      "line-width": outlineWidth,
+      "line-opacity": 1.0,
+    },
+    layout: {
+      visibility: visible ? "visible" : "none",
+    }
+  });
+  // const coloredOutlineId = outlineLayerId(uuid)+"-colored";
+  // map.addLayer({
+  //   id: coloredOutlineId,
+  //   type: "line",
+  //   source: uuid,
+  //   paint: {
+  //     "line-color": color,
+  //     "line-width": outlineWidth * 1.5,
+  //     "line-opacity": 1.0,
+  //   },
+  //   layout: {
+  //     visibility: visible ? "visible" : "none",
+  //   }
+  // });
+  syncLayerVisibility(map, uuid, outlineId);
+  // syncLayerVisibilityAndOpacity(map, uuid, outlineId);
+
+  return { layer: source, layerIds: [uuid, outlineId] };
 }
 
 export function updateRectangleBounds(
@@ -84,6 +123,10 @@ export function removeRectangleLayer(
   map: Map,
   layer: LayerType,
 ) {
+  const outlineId = outlineLayerId(layer.id);
+  if (map.getLayer(outlineId)) {
+    map.removeLayer(outlineId);
+  }
   map.removeLayer(layer.id);
   map.removeSource(layer.id);
 }
@@ -91,11 +134,12 @@ export function removeRectangleLayer(
 // Point layer utilities
 export function addPointLayer(
   map: Map,
+  id: string,
   info: PointSelectionInfo,
   color: string,
   visible=true,
 ) {
-  const uuid = v4();
+  const uuid = id ?? v4();
   const geoJson: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
     features: [{
@@ -129,7 +173,7 @@ export function addPointLayer(
     }
   });
 
-  return { layer: source };
+  return { layer: source, layerIds: [uuid] }; // add layerIds for compatability wtih rectangle
 }
 
 export function updatePointLocation(

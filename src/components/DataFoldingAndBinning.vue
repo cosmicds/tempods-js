@@ -80,13 +80,13 @@
                     :config-options="{responsive: false, modeBarButtonsToRemove: ['autoScale2d', 'sendDataToCloud','lasso2d', 'select2d'], displaylogo: false}"
                     @plot-click="handlePointClick"
                     :layout-options="withPlotlyDefaults({
-                      margin: {t: 10, r: 20, b: 60, l: 90}, 
+                      margin: {t: 10, r: 20, b: 60, l: 90},
                       autosize: false, width: 700, height: 400,
                       xaxis: {
                         automargin: false,
                         gridcolor: 'rgba(128, 128, 128, 0.3)',
                         title: {
-                          standoff: 10,
+                          standoff: 22,
                         },
                       },
                       yaxis: {
@@ -547,7 +547,7 @@ function foldedTimeSeriesRawToDataSet(foldedTimeSeries: FoldedTimeSeriesData): O
     });
   });
   // the ascii +- symbol is this characher: ±
-  const hovertemplate = '%{customdata|%Y-%m-%d %H:%M}<br>%{y:0.2e}±%{error_y.array:0.2e}<extra></extra>';
+  const hovertemplate = '%{customdata|%b %-d, %Y %-I:%M %p}<br>%{y:0.2e}±%{error_y.array:0.2e}<extra></extra>';
   
   return { x, y, lower, upper, errorType: 'bar', datasetOptions: { customdata, hovertemplate } };
 }

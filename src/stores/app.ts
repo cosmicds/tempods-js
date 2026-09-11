@@ -7,7 +7,7 @@ import * as zipson from "zipson";
 
 import type { AggValue, InitMapOptions, LatLngPair, LayerReadiness, LayerStatus, MappingBackends, SelectionType, TimeRange, UnifiedRegion, UserDataset } from "@/types";
 import { moleculeServiceConfigs, MoleculeType } from "@/esri/utils";
-import { TempoDataService, FetchOptions } from "@/esri/services/TempoDataService";
+import { TempoDataService, FetchOptions, summaryError } from "@/esri/services/TempoDataService";
 import { useUniqueTimeSelection } from "@/composables/useUniqueTimeSelection";
 import { useTimezone, type Timezone } from "@/composables/useTimezone";
 import { atleast1d } from "@/utils/atleast1d";
@@ -272,6 +272,36 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
       }
     });
   }
+  
+  function setRegionColor(region: UnifiedRegion, newColor: string) {
+    if (newColor.trim() === '') {
+      console.error("Region color cannot be empty.");
+      return;
+    }
+    region.color = newColor;
+    console.log(`Changed ${region.geometryType} region color to: ${newColor}`);
+    if (maps.value.length > 0) {
+      const map = maps.value[0];
+
+      // this is setup so that the region id is the same as the id of the main filled layer
+      if (map.getLayer(region.id)) {
+        if (region.geometryType === 'rectangle') {
+          map.setPaintProperty(region.id, "fill-color", newColor);
+
+        } else if (region.geometryType === 'point') {
+          map.setPaintProperty(region.id, "circle-color", newColor);
+
+        }
+      }
+    }
+    
+    // check for any datasets using this region and update the region color
+    datasets.value.forEach(ds => {
+      if (ds.region.id === region.id) {
+        ds.region.color = region.color;
+      }
+    });
+  }
 
   function setTimeRangeName(timeRange: TimeRange, newName: string) {
     if (newName.trim() === '') {
@@ -298,8 +328,8 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
     dataset.loading = true;
 
     // loadingSamples.value = sel.id;
-    // sampleErrors.value[sel.id] = null;
-    
+    sampleErrors.value[dataset.id] = null;
+
     const timeRanges = atleast1d(dataset.timeRange.range);
     
     try {
@@ -310,6 +340,10 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
       const data = await tds.fetchTimeseriesData(dataset.region.geometryInfo, timeRanges, {onProgress});
       dataset.samples = data.values;
       dataset.errors = data.errors;
+      dataset.summary = data.summary;
+      // fetchSamples catches per-range failures, so we only get the summary. 
+      // something to fix for the future perhaps
+      sampleErrors.value[dataset.id] = summaryError(data.summary);
       // loadingSamples.value = "finished";
       console.log(`Fetched data for ${timeRanges.length} time range(s)`);
     } catch (error) {
@@ -339,6 +373,8 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
       if (data) {
         dataset.samples = data.values;
         dataset.locations = data.locations;
+        dataset.summary = data.summary;
+        sampleErrors.value[dataset.id] = summaryError(data.summary);
         console.log(`Fetched center point data for ${timeRanges.length} time range(s)`);
       }
     } catch (error) {
@@ -433,10 +469,12 @@ const createTempoStore = (backend: MappingBackends) => defineStore("tempods", ()
     addDataset,
     fetchDataForDataset,
     fetchCenterPointDataForDataset,
+    sampleErrors,
     markDatasetUpdated,
     datasetHasSamples,
     regionHasDatasets,
     setRegionName,
+    setRegionColor,
     setTimeRangeName,
 
     deleteTimeRange,

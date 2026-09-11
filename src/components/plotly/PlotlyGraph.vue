@@ -17,7 +17,7 @@ import Plotly, { PlotlyHTMLElement, newPlot, purge, restyle, relayout, type Data
 import type { PlotlyGraphDataSet } from '../../types';
 import { createErrorBands, filterNullValues, splitDatasetByGap, createErrorBars, dataHasErrors } from "./plotly_graph_elements";
 import { cycle } from "@/utils/array_operations/array_math";
-import { DEFAULT_PLOT_LAYOUT, DEFAULT_PLOT_CONFIG } from "@/components/plotly/defaults";
+import { DEFAULT_PLOT_LAYOUT, DEFAULT_PLOT_CONFIG, DATE_AXIS_DEFAULTS } from "@/components/plotly/defaults";
 
 // https://stackoverflow.com/a/7616484
 const generateHash = (string) => {
@@ -247,10 +247,15 @@ const layout = computed<Partial<Plotly.Layout>>(() => {
   const axisMax = Math.max(1, paddingFactor * max);
   const axisMin = props.showZero ? Math.min(0, min) : min;
 
+  // Only date-typed axes get the date formats. 
+  const isDateAxis = props.datasets[0]?.x?.[0] instanceof Date
+    || props.layoutOptions?.xaxis?.type === 'date';
+
   return {
     ...DEFAULT_PLOT_LAYOUT,
     ...(props.layoutOptions || {}),
     xaxis: {
+      ...(isDateAxis ? DATE_AXIS_DEFAULTS : {}),
       ...(props.layoutOptions?.xaxis || {}),
       ...(props.xaxisTitle ? {title: { text: props.xaxisTitle, ...props.layoutOptions?.xaxis?.title }} : {}),
     },

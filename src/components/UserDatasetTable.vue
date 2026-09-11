@@ -15,7 +15,7 @@
           :dataset-name="dataset.name"
           />
         <v-data-table
-          class="utdc--data-table utdc--sampples-table"
+          class="utdc--data-table utdc--sampples-table scroll-y"
           :items="samplesItems"
           :headers="sampleHeaders"
           @click:row="emits('rowClick', $event.item)"
@@ -286,6 +286,5 @@ p.utdc--uncertainty-note {
 
 .utdc--data-table {
   max-height: 70vh;
-  overflow-y: auto;
 }
 </style>

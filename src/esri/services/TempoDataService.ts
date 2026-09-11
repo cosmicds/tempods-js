@@ -39,6 +39,18 @@ export interface RequestSummary {
   urlList?: string[];
 }
 
+/** Error message for a fetch's failed requests, or null. A clean fetch that returns no data is not an error. */
+export function summaryError(summary: RequestSummary | undefined): string | null {
+  if (!summary || summary.failedCount <= 0) {
+    return null;
+  }
+  const { failedCount, totalRequests } = summary;
+  if (failedCount >= totalRequests) {
+    return `All ${totalRequests} data request(s) failed. The data service may be unavailable.`;
+  }
+  return `${failedCount} of ${totalRequests} data requests failed, so some data may be missing.`;
+}
+
 export interface RequestStats {
   // HTTP status
   httpStatus: 'success' | 'error';
@@ -424,7 +436,12 @@ export class TempoDataService {
     await Promise.all(promises);
     // Sort boundaries by start time for easier processing
     boundaries.sort((a, b) => a.start - b.start);
-    this._boundaries = boundaries;
+    // only cache if we got both. if one service was down, then
+    // we don't want to cache that state. force it to try again next time
+    // it doesn't take too much time. 
+    if (boundaries.length === this.baseUrlArray.length) {
+      this._boundaries = boundaries;
+    }
     return boundaries;
   }
 
@@ -1034,8 +1051,13 @@ export class TempoDataService {
     const result: TimeSeriesDataWithStats = this.aggregateByTime(rawData.samples);
 
     if (rawData.requestSummary) {
+      // just the counts - urlList stays on rawData.requestSummary for debugging
+      const { totalRequests, successCount, failedCount, retrievedSamples } = rawData.requestSummary;
       result.summary = {
-        ...rawData.requestSummary,
+        totalRequests,
+        successCount,
+        failedCount,
+        retrievedSamples,
         timeseriesLength: Object.keys(result.values).length,
       };
     }
@@ -1059,7 +1081,7 @@ export class TempoDataService {
     rectangle: RectBounds,
     timeRanges: TimeRanges,
     options: FetchOptions = {}
-  ): Promise<TimeSeriesData | null> {
+  ): Promise<TimeSeriesDataWithStats | null> {
     const center: PointBounds = {
       x: (rectangle.xmin + rectangle.xmax) / 2,
       y: (rectangle.ymin + rectangle.ymax) / 2

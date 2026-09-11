@@ -91,6 +91,14 @@
       <transition name="tour-hint-fade">
         <div v-if="showTourHintVisible" class="tour-hint-bubble">
           Open tour here any time
+          <font-awesome-icon
+              class="ml-2 cursor-pointer"
+              icon="fa-circle-xmark"
+              size="lg"
+              @click="showTourHintVisible = false"
+              @keyup.enter="showTourHintVisible = false"
+              color="#ffcc33"
+            />
         </div>
       </transition>
     </div>
@@ -236,7 +244,7 @@ const ioErrorMessage = ref("");
 
 const showTourHintVisible = ref(false);
 const tourHintAlreadyShown = ref(false);
-let tourHintTimeout: ReturnType<typeof setTimeout> | undefined;
+// let tourHintTimeout: ReturnType<typeof setTimeout> | undefined;
 
 watch(showTourHint, (visible) => {
   if (!visible) {
@@ -248,10 +256,10 @@ watch(showTourHint, (visible) => {
   }
   tourHintAlreadyShown.value = true;
   showTourHintVisible.value = true;
-  clearTimeout(tourHintTimeout);
-  tourHintTimeout = setTimeout(() => {
-    showTourHintVisible.value = false;
-  }, 5000);
+  // clearTimeout(tourHintTimeout);
+  // tourHintTimeout = setTimeout(() => {
+  //   showTourHintVisible.value = false;
+  // }, 5000);
 });
 
 const touchscreen = supportsTouchscreen();

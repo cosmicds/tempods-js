@@ -64,9 +64,7 @@
 </template>
 
 <script setup lang="ts">
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { computed, ref } from 'vue';
-import type { TimeRangeConfig } from './date_time_range_generators';
+import {  ref, watch } from 'vue';
 import type { TimeRange } from '@/types';
 
 const formatDate = (date: Date): string => {
@@ -81,7 +79,8 @@ const formatDate = (date: Date): string => {
 const props = defineProps<{
   name?: string;
   timeRange: TimeRange;
-  isHovering: boolean;
+  isHovering?: boolean;
+  show: boolean;
 }>();
 // console.log('TimeRangeCard props:', props.timeRange.config);
 
@@ -90,6 +89,9 @@ function onShowClick() {
   showDetails.value = !showDetails.value;
 }
 
+watch(() => props.show, (newVal) => {
+  showDetails.value = newVal;
+});
 </script>
     
 

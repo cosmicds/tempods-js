@@ -89,12 +89,14 @@ const cssVars = computed(() => ({
   flex-direction: column;
   justify-content: flex-start;
 
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  // we want the scrollbars. but keeping code for reference
+  // -ms-overflow-style: none;
+  // scrollbar-width: none;
   padding: 0;
 
-  &.closed::-webkit-scrollbar {
-    display: none;
+  // collapsed nothing to scroll
+  &.closed {
+    overflow: hidden;
   }
 }
 

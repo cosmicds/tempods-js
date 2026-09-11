@@ -1,6 +1,6 @@
 <template>
   <div class="map-container">
-    <v-card class="map-contents" style="width:100%; height: 100%;">
+    <v-card class="map-contents">
       <v-toolbar
         density="compact"
         color="var(--info-background)"
@@ -55,38 +55,25 @@
         ></location-search>
       </div>
     </v-card>
-    <div class="slider-row mx-16 mt-12">
-      <v-slider
-        class="time-slider"
-        v-model="timeIndex"
-        :min="minIndex"
-        :max="maxIndex"
-        :step="1"
-        color="#068ede95"
-        thumb-label="always"
-        :track-size="10"
-        show-ticks="always"
-        hide-details
-        @end="() => {
-          timeSliderUsedCount += 1;
-          // if (map) {
-          //   setLayerVisibility(map as Map, activeLayer, true);
-          // }
-        }"
+    
+    <v-tooltip
+        text="Change map height"
+        location="start center"
+        :disabled="dragging"
       >
-        <template v-slot:thumb-label>
-          <div class="thumb-label">
-            {{ thumbLabel }}
-          </div>
+        <template #activator="{ props }">
+          <div
+            v-bind="props"
+            class="handle vertical-handle"
+            ref="middle-handle"
+            aria-label="Resize map"
+            role="separator"
+          ></div>
         </template>
-      </v-slider>
-      <icon-button
-        class="play-pause"
-        :fa-icon="playing ? 'pause' : 'play'"
-        fa-size="sm"
-        @activate="playing = !playing"
-      ></icon-button>
-    </div>
+      </v-tooltip>
+    
+    <TimeSlider />
+    
     <div class="d-flex flex-row">
       <map-controls
         class="flex-grow-1"
@@ -123,6 +110,8 @@ import { usePointSelection } from "@/composables/maplibre/usePointSelection";
 import { COLORS } from "@/utils/color";
 import { EsriSampler } from "@/esri/services/sampling";
 import { useMultiMarker } from '@/composables/maplibre/useMultiMarker';
+
+import TimeSlider from "@/components/TimeSlider.vue";
 
 import { setLayerOpacity, setLayerVisibility } from "@/maplibre_controls";
 
@@ -640,15 +629,16 @@ function rectangleIsDegenerate(info: RectangleSelectionInfo): boolean {
 }
 
 function addLayer(
+  id: string,
   info: RectangleSelectionInfo | PointSelectionInfo,
   geometryType: "rectangle" | "point",
   color: string,
 ): { layer: GeoJSONSource } {
   const isRect = geometryType === 'rectangle';
   const layerInfo = isRect ?
-    addRectangleLayer((map.value)!, info as RectangleSelectionInfo, color, regionOpacity.value, regionVisibility.value) :
-    addPointLayer((map.value)!, info as PointSelectionInfo, color, regionVisibility.value);
-  map.value?.moveLayer(layerInfo.layer.id);
+    addRectangleLayer((map.value)!, id, info as RectangleSelectionInfo, color, regionOpacity.value, regionVisibility.value) :
+    addPointLayer((map.value)!, id,  info as PointSelectionInfo, color, regionVisibility.value);
+  layerInfo.layerIds.forEach(id => map.value?.moveLayer(id));
   return layerInfo;
 }
 
@@ -668,8 +658,8 @@ function createRegion(info: RectangleSelectionInfo | PointSelectionInfo, geometr
   const color = COLORS[regionsCreatedCount.value % COLORS.length];
   regionsCreatedCount.value += 1;
 
-  const id = v4();
-  const { layer } = addLayer(info, geometryType, color);
+  const id = v4(); // this will serve as the id of the region and the main filled layer
+  const { layer } = addLayer(id, info, geometryType, color);
   regionLayers[id] = layer;
   return {
     id,
@@ -677,6 +667,7 @@ function createRegion(info: RectangleSelectionInfo | PointSelectionInfo, geometr
     geometryInfo: toRaw(info),
     geometryType: geometryType,
     color,
+    defaultColor: color,
   } as UnifiedRegionType;
 }
 
@@ -693,7 +684,7 @@ function updateRegionLayers(newRegions: UnifiedRegionType[]) {
   const removed = getRegionsDifference(existingRegions, newRegions);
   added.forEach(region => {
     if (map.value && !regionLayers[region.id]) {
-      const { layer } = addLayer(region.geometryInfo, region.geometryType, region.color);
+      const { layer } = addLayer(region.id, region.geometryInfo, region.geometryType, region.color);
       regionLayers[region.id] = layer;
     }
   });
@@ -787,7 +778,8 @@ currentTempoDataService.value.withMetadataCache().then(meta => {
   console.log("could not create sampler because there is no metada");
 });
 
-watch([showSamplingPreviewMarkers, regions, ()=> regions.value.length], (newVal) => {
+// watch the map and sampler too
+watch([showSamplingPreviewMarkers, regions, ()=> regions.value.length, map, sampler], (newVal) => {
   const tempoDataService = currentTempoDataService.value;
   const show = newVal[0];
   const regs = newVal[1];
@@ -806,7 +798,7 @@ watch([showSamplingPreviewMarkers, regions, ()=> regions.value.length], (newVal)
     });
     samplingPreviewMarkers.addMarkers(locations);
   }
-});
+}, { immediate: true });
 
 // TODO: This may need to be revisited when there are two maps
 watch(focusRegion, region => {
@@ -821,6 +813,123 @@ watch(focusRegion, region => {
   }
 });
 
+const dragging = ref(false);
+
+type EventHandler = (event: PointerEvent) => void;
+
+interface HandleSetupParams {
+  handle: HTMLElement;
+  onMove: EventHandler;
+  initialEventHandler?: (event: PointerEvent) => void;
+}
+
+function setupHandleEvents(params: HandleSetupParams) {
+  
+  const { handle, onMove } = params;
+
+  handle.addEventListener("pointerdown", (event: PointerEvent) => {
+
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+
+    document.body.classList.add("panel-size-dragging");
+
+    dragging.value = true;
+
+    if (params.initialEventHandler) {
+      params.initialEventHandler(event); 
+    }
+
+    const onUp = (ev: PointerEvent) => {
+      try {
+        handle.releasePointerCapture(ev.pointerId); 
+      } catch (error) {
+        console.error(error);
+      }
+      document.body.classList.remove("panel-size-dragging");
+      dragging.value = false;
+
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+  });
+}
+
+import { onMounted } from "vue";
+let animationFrame = 0;
+
+
+
+function setBasis(panel: HTMLElement, sizePx: number) {
+  panel.style.flexBasis = `${sizePx}px`;
+  // panel.style.setProperty("--panel-height", `${sizePx}px`); // Ensure the basis is set in pixels
+
+}
+
+function getBasis(panel: HTMLElement): number {
+  const basis = parseFloat(getComputedStyle(panel).flexBasis);
+  return isNaN(basis) ? 0 : basis;
+}
+
+function updateSizes(panelDefault: boolean = false, datasetsDefault: boolean = false) {
+  // const rootElement = root.value;
+  const layers = document.querySelector(".map-contents") as HTMLElement;
+
+
+  const layersWidth = layers.clientHeight;
+  setBasis(layers, layersWidth);
+}
+
+const handle = useTemplateRef<HTMLElement>("middle-handle");
+
+onMounted(() => {
+  
+  const handleValue = handle.value;
+  const panel = document.querySelector(".map-contents") as HTMLElement;
+  if (handleValue && panel) {
+    let startMousePos = 0;
+    let startPanelSize = 0;
+
+    const onLeftMove = (event: PointerEvent) => {
+      const dx = event.clientY - startMousePos;
+      const minSize = 250; // Minimum width for the left panel
+      const newSize = Math.max(minSize, startPanelSize + dx);
+      setBasis(panel, newSize);
+    };
+
+    const initialLeftHandler = (event: PointerEvent) => {
+      startMousePos = event.clientY;
+      startPanelSize = getBasis(panel);
+    };
+
+    setupHandleEvents({
+      handle: handleValue,
+      onMove: onLeftMove,
+      initialEventHandler: initialLeftHandler,
+    });
+
+  }
+
+  
+  
+
+  window.addEventListener("resize", () => {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = requestAnimationFrame(() => updateSizes());
+  });
+
+ 
+  updateSizes(true, true);
+
+});
+
+
 </script>
 
 <style lang="less">
@@ -830,6 +939,13 @@ watch(focusRegion, region => {
   display: flex;
   flex-direction: column;
   padding-inline: 8px;
+
+  > div {
+    flex-shrink: 0;
+  }
+  .map-contents {
+    flex-basis: 50%;
+  }
 
   .location-and-sharing {
     position: absolute;
@@ -884,87 +1000,14 @@ watch(focusRegion, region => {
     border: 1px solid #068ede;
   }
 
-  .slider-row {
-    display: flex;
-    flex-direction: row;
-    padding-left: 0;
-  }
 
-  >.play-pause {
-    height: fit-content;
-    align-self: center;
-    padding-inline: 0.5rem;
-    margin-left: 0.75rem;
-    width: 2.5rem;
-    color: var(--accent-color);
-    border: 2px solid var(--accent-color);
-  }
-
-  .play-pause[disabled] {
-    filter: grayscale(100%);
-    cursor: progress;
-    cursor: not-allowed;
-  }
 
   .icon-wrapper {
     padding-inline: 0.5rem !important;
   }
 }
 
-.time-slider {
 
-  .v-slider-thumb {
-
-    .v-slider-thumb__surface::after {
-      background-image: url("@/assets/smithsonian.png");
-      background-size: 30px 30px;
-      height: 30px;
-      width: 30px;
-    }
-
-    .v-slider-thumb__label {
-      background-color: var(--accent-color-2);
-      border: 0.25rem solid var(--accent-color);
-      width: max-content;
-      height: 2.5rem;
-      font-size: 1rem;
-
-      &::before {
-        color: var(--accent-color);
-      }
-    }
-  }
-
-  .v-slider-track__tick {
-    background-color: var(--accent-color);
-    /* Change color */
-    height: 15px;
-    /* Change size */
-    width: 4px;
-    margin-top: 0 !important;
-    // top: -10%;
-  }
-
-  .v-slider {
-
-    .v-slider.v-input--horizontal {
-      grid-template-rows: auto 0px;
-    }
-
-    .v-slider.v-input--horizontal .v-slider-thumb__label {
-      // top: calc(var(--v-slider-thumb-size) * 1.5);
-      z-index: 2000;
-    }
-
-    .v-slider.v-input--horizontal .v-slider-thumb__label::before {
-      border-left: 6px solid transparent;
-      border-right: 6px solid transparent;
-      border-bottom: 6px solid transparent;
-      border-top: 6px solid currentColor;
-      bottom: -15px;
-    }
-  }
-}
 
 #opacity-slider-container {
   display: flex;
@@ -992,6 +1035,40 @@ watch(focusRegion, region => {
   max-width: 200px;
   color: black;
 }
+
+
+.handle.vertical-handle {
+  flex: 0 0 var(--handle-size);
+  width: 100%;
+  margin-top: calc(var(--handle-size) + 6px); // 6px from box shadow
+  cursor: col-resize;
+  background: var(--handle-color);
+  position: relative;
+  touch-action: none;
+}
+
+.handle.vertical-handle:hover {
+  background: var(--handle-hover-color);
+}
+
+
+.handle.vertical-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.35);
+  box-shadow: 0 -6px 0 rgba(255,255,255,0.18), 0 6px 0 rgba(255,255,255,0.18);
+}
+
+.handle.vertical-handle:hover::after {
+  box-shadow: 0 -6px 0 rgba(255,2555,255,0.42), 0 6px 0 rgba(255,255,255,0.42);
+}
+
 
 @import "@/styles/maplibre-layer-control.css";
 </style>
